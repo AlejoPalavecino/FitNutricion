@@ -1,0 +1,1513 @@
+// ============================================================================
+// CATÁLOGO BILINGÜE OPENGYM GENERADO AUTOMÁTICAMENTE (scripts/ingest-opengym.ts)
+// Fuente: https://github.com/emilfunk/opengym/tree/main/
+// ============================================================================
+
+import type { ExerciseCatalogItem, WorkoutRoutine, WorkoutSession } from '../types/nutrition';
+
+export const OPENGYM_EXERCISE_CATALOG: ExerciseCatalogItem[] = [
+  {
+    "id": "og-1323",
+    "nameEs": "Remo Sentado en Polea Baja (Gironda)",
+    "nameEn": "cable rope seated row",
+    "aliases": [
+      "Remo Gironda",
+      "Seated Cable Row",
+      "Remo en Polea Baja",
+      "cable rope seated row",
+      "Remo Sentado en Polea Baja (Gironda)",
+      "Espalda / Dorsales con Polea"
+    ],
+    "primaryMuscle": "Espalda / Dorsales",
+    "secondaryMuscles": [
+      "Trapecios",
+      "Bíceps",
+      "Espalda Baja / Lumbares"
+    ],
+    "equipment": "Polea",
+    "category": "hipertrofia",
+    "images": [
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/images/1323-SJqRxOt.jpg",
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/videos/1323-SJqRxOt.gif"
+    ],
+    "instructionsEs": [
+      "Siéntate con las rodillas semiflexionadas y el torso erguido sujetando el agarre neutro.",
+      "Tracciona el maneral hacia el abdomen bajo retrayendo intensamente las escápulas al final del recorrido.",
+      "Extiende los brazos de forma controlada dejando que las escápulas se separen ligeramente sin encorvar la zona lumbar."
+    ],
+    "isUnilateral": false
+  },
+  {
+    "id": "og-1409",
+    "nameEs": "Hip Thrust con Barra (Empuje de Cadera)",
+    "nameEn": "barbell glute bridge",
+    "aliases": [
+      "Hip Thrust",
+      "Puente de Glúteo con Barra",
+      "Barbell Glute Bridge",
+      "barbell glute bridge",
+      "Hip Thrust con Barra (Empuje de Cadera)",
+      "Glúteos con Barra"
+    ],
+    "primaryMuscle": "Glúteos",
+    "secondaryMuscles": [
+      "Isquiotibiales",
+      "Abdominales / Core"
+    ],
+    "equipment": "Barra",
+    "category": "fuerza",
+    "images": [
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/images/1409-qKBpF7I.jpg",
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/videos/1409-qKBpF7I.gif"
+    ],
+    "instructionsEs": [
+      "Apoya el borde inferior de las escápulas en un banco estable y coloca la barra acolchada sobre el pliegue inguinal.",
+      "Ubica los pies de modo que en la extensión máxima las tibias queden completamente verticales (90° en la rodilla).",
+      "Extiende la cadera con retroversión pélvica (mirada al frente y mentón recogido) apretando los glúteos 1 segundo en el tope."
+    ],
+    "isUnilateral": false
+  },
+  {
+    "id": "og-2330",
+    "nameEs": "Jalón al Pecho en Polea Alta",
+    "nameEn": "cable lat pulldown full range of motion",
+    "aliases": [
+      "Jalón al pecho",
+      "Lat Pulldown",
+      "Polea al Pecho",
+      "Dorsales en Polea",
+      "cable lat pulldown full range of motion",
+      "Jalón al Pecho en Polea Alta",
+      "Espalda / Dorsales con Polea"
+    ],
+    "primaryMuscle": "Espalda / Dorsales",
+    "secondaryMuscles": [
+      "Bíceps",
+      "Trapecios",
+      "Antebrazos"
+    ],
+    "equipment": "Polea",
+    "category": "hipertrofia",
+    "images": [
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/images/2330-LEprlgG.jpg",
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/videos/2330-LEprlgG.gif"
+    ],
+    "instructionsEs": [
+      "Ajusta las almohadillas sobre los muslos y sujeta la barra con un agarre prono ligeramente más ancho que los hombros.",
+      "Inicia el movimiento con una depresión escapular y tracciona dirigiendo los codos hacia abajo y hacia las caderas.",
+      "Lleva la barra hasta la parte superior del pecho y retorna de forma controlada permitiendo la elongación dorsal."
+    ],
+    "isUnilateral": false
+  },
+  {
+    "id": "og-0025",
+    "nameEs": "Press de Banca Plano con Barra",
+    "nameEn": "barbell bench press",
+    "aliases": [
+      "Press Banca",
+      "Bench Press",
+      "Flat Bench",
+      "Pecho con Barra",
+      "barbell bench press",
+      "Press de Banca Plano con Barra"
+    ],
+    "primaryMuscle": "Pecho",
+    "secondaryMuscles": [
+      "Tríceps",
+      "Hombros (Deltoides)"
+    ],
+    "equipment": "Barra",
+    "category": "fuerza",
+    "images": [
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/images/0025-EIeI8Vf.jpg",
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/videos/0025-EIeI8Vf.gif"
+    ],
+    "instructionsEs": [
+      "Túmbate en el banco plano asegurando una firme retracción y depresión escapular con los pies anclados al suelo (leg drive).",
+      "Sujeta la barra con un agarre ligeramente mayor al ancho biacromial y sácala del rack con los codos bloqueados sobre los hombros.",
+      "Realiza una fase excéntrica controlada de 2 a 3 segundos llevando la barra hacia la línea inferior del esternón con los codos a ~45-60°.",
+      "Empuja explosivamente en la fase concéntrica manteniendo los glúteos y escápulas en contacto con el banco."
+    ],
+    "isUnilateral": false
+  },
+  {
+    "id": "og-0047",
+    "nameEs": "Press de Banca Inclinado con Barra",
+    "nameEn": "barbell incline bench press",
+    "aliases": [
+      "Press Inclinado",
+      "Incline Bench Press",
+      "Pecho Superior Barra",
+      "barbell incline bench press",
+      "Press de Banca Inclinado con Barra",
+      "Pecho con Barra"
+    ],
+    "primaryMuscle": "Pecho",
+    "secondaryMuscles": [
+      "Hombros (Deltoides)",
+      "Tríceps"
+    ],
+    "equipment": "Barra",
+    "category": "hipertrofia",
+    "images": [
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/images/0047-3TZduzM.jpg",
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/videos/0047-3TZduzM.gif"
+    ],
+    "instructionsEs": [
+      "Ajusta el respaldo del banco entre 30° y 45° para priorizar la porción clavicular del pectoral mayor.",
+      "Mantén retracción escapular y desciende la barra de forma controlada hacia la parte alta del pecho (debajo de las clavículas).",
+      "Extiende los codos empujando verticalmente sin perder la estabilidad escapular."
+    ],
+    "isUnilateral": false
+  },
+  {
+    "id": "og-0289",
+    "nameEs": "Press de Banca con Mancuernas",
+    "nameEn": "dumbbell bench press",
+    "aliases": [
+      "Press Mancuernas",
+      "Dumbbell Bench Press",
+      "DB Press Plano",
+      "dumbbell bench press",
+      "Press de Banca con Mancuernas",
+      "Pecho con Mancuerna"
+    ],
+    "primaryMuscle": "Pecho",
+    "secondaryMuscles": [
+      "Tríceps",
+      "Hombros (Deltoides)"
+    ],
+    "equipment": "Mancuerna",
+    "category": "hipertrofia",
+    "images": [
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/images/0289-SpYC0Kp.jpg",
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/videos/0289-SpYC0Kp.gif"
+    ],
+    "instructionsEs": [
+      "Siéntate con las mancuernas apoyadas en los muslos y túmbate impulsándolas con las rodillas hacia la posición inicial.",
+      "Desciende las mancuernas en fase excéntrica controlada buscando un estiramiento profundo de las fibras pectorales.",
+      "Empuja convergiendo ligeramente las mancuernas arriba sin chocarlas para mantener tensión continua."
+    ],
+    "isUnilateral": true
+  },
+  {
+    "id": "og-0314",
+    "nameEs": "Press Inclinado con Mancuernas",
+    "nameEn": "dumbbell incline bench press",
+    "aliases": [
+      "Incline DB Press",
+      "Press Inclinado Mancuernas",
+      "Pecho Alto Mancuernas",
+      "dumbbell incline bench press",
+      "Press Inclinado con Mancuernas",
+      "Pecho con Mancuerna"
+    ],
+    "primaryMuscle": "Pecho",
+    "secondaryMuscles": [
+      "Hombros (Deltoides)",
+      "Tríceps"
+    ],
+    "equipment": "Mancuerna",
+    "category": "hipertrofia",
+    "images": [
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/images/0314-ns0SIbU.jpg",
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/videos/0314-ns0SIbU.gif"
+    ],
+    "instructionsEs": [
+      "Configura el banco a 30° para maximizar el reclutamiento del haz clavicular sin sobrecargar el deltoides anterior.",
+      "Baja las mancuernas con los antebrazos perpendiculares al suelo hasta lograr un estiramiento completo del pectoral.",
+      "Empuja de forma fluida hasta cerca de la extensión completa."
+    ],
+    "isUnilateral": true
+  },
+  {
+    "id": "og-0227",
+    "nameEs": "Cruce de Poleas (Aperturas en Polea)",
+    "nameEn": "cable standing fly",
+    "aliases": [
+      "Cruces en Polea",
+      "Cable Fly",
+      "Cable Crossover",
+      "Aperturas Polea",
+      "cable standing fly",
+      "Cruce de Poleas (Aperturas en Polea)",
+      "Pecho con Polea"
+    ],
+    "primaryMuscle": "Pecho",
+    "secondaryMuscles": [
+      "Hombros (Deltoides)"
+    ],
+    "equipment": "Polea",
+    "category": "hipertrofia",
+    "images": [
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/images/0227-Pr9Rhf4.jpg",
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/videos/0227-Pr9Rhf4.gif"
+    ],
+    "instructionsEs": [
+      "Colócate en el centro de las poleas dando un paso al frente para estabilizar el torso.",
+      "Con una ligera flexión fija de codos, realiza una aducción horizontal de hombros juntando las manos frente al torso.",
+      "Sostén 1 segundo la contracción isométrica máxima (peak contraction) y retorna lentamente estirando el pectoral."
+    ],
+    "isUnilateral": false
+  },
+  {
+    "id": "og-0043",
+    "nameEs": "Sentadilla Trasera con Barra (Back Squat)",
+    "nameEn": "barbell full squat",
+    "aliases": [
+      "Sentadilla",
+      "Squat",
+      "Back Squat",
+      "Sentadilla Libre",
+      "barbell full squat",
+      "Sentadilla Trasera con Barra (Back Squat)",
+      "Cuádriceps con Barra"
+    ],
+    "primaryMuscle": "Cuádriceps",
+    "secondaryMuscles": [
+      "Glúteos",
+      "Espalda Baja / Lumbares",
+      "Abdominales / Core"
+    ],
+    "equipment": "Barra",
+    "category": "fuerza",
+    "images": [
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/images/0043-qXTaZnJ.jpg",
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/videos/0043-qXTaZnJ.gif"
+    ],
+    "instructionsEs": [
+      "Apoya la barra sobre los trapecios superiores (barra alta) o deltoides posteriores (barra baja) sujetándola con firmeza.",
+      "Toma aire profundo hacia el abdomen (maniobra de Valsalva / bracing 360°) antes de iniciar el descenso.",
+      "Flexiona simultáneamente caderas y rodillas manteniendo las rodillas alineadas con la punta de los pies hasta romper el paralelo.",
+      "Impúlsate desde el mediopié extendiendo rodillas y cadera de manera coordinada."
+    ],
+    "isUnilateral": false
+  },
+  {
+    "id": "og-0085",
+    "nameEs": "Peso Muerto Rumano con Barra (RDL)",
+    "nameEn": "barbell romanian deadlift",
+    "aliases": [
+      "RDL",
+      "Peso Muerto Rumano",
+      "Romanian Deadlift",
+      "PMR",
+      "barbell romanian deadlift",
+      "Peso Muerto Rumano con Barra (RDL)",
+      "Isquiotibiales con Barra"
+    ],
+    "primaryMuscle": "Isquiotibiales",
+    "secondaryMuscles": [
+      "Glúteos",
+      "Espalda Baja / Lumbares",
+      "Antebrazos"
+    ],
+    "equipment": "Barra",
+    "category": "fuerza",
+    "images": [
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/images/0085-wQ2c4XD.jpg",
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/videos/0085-wQ2c4XD.gif"
+    ],
+    "instructionsEs": [
+      "Inicia de pie con la barra pegada a los muslos, escápulas activas y columna rigurosamente neutra.",
+      "Desbloquea ligeramente las rodillas (15-20°) e inicia una bisagra de cadera pura llevando los glúteos hacia atrás.",
+      "Desliza la barra rozando las piernas hasta sentir el máximo estiramiento mecánico en los isquiotibiales (mitad de la tibia).",
+      "Extiende la cadera contrayendo glúteos e isquios para volver a la vertical sin hiperextender la zona lumbar."
+    ],
+    "isUnilateral": false
+  },
+  {
+    "id": "og-0032",
+    "nameEs": "Peso Muerto Convencional con Barra",
+    "nameEn": "barbell deadlift",
+    "aliases": [
+      "Peso Muerto",
+      "Deadlift",
+      "Conventional Deadlift",
+      "PM",
+      "barbell deadlift",
+      "Peso Muerto Convencional con Barra",
+      "Espalda Baja / Lumbares con Barra"
+    ],
+    "primaryMuscle": "Espalda Baja / Lumbares",
+    "secondaryMuscles": [
+      "Glúteos",
+      "Isquiotibiales",
+      "Trapecios",
+      "Antebrazos"
+    ],
+    "equipment": "Barra",
+    "category": "fuerza",
+    "images": [
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/images/0032-ila4NZS.jpg",
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/videos/0032-ila4NZS.gif"
+    ],
+    "instructionsEs": [
+      "Coloca los pies a la anchura de la cadera con la barra exactamente sobre la mitad del pie.",
+      "Sujeta la barra por fuera de las tibias, lleva las espinillas hacia la barra, eleva el pecho y elimina la holgura de la barra (pull the slack out).",
+      "Empuja el suelo con las piernas manteniendo los dorsales activos para que la barra suba pegada al cuerpo hasta el bloqueo de cadera."
+    ],
+    "isUnilateral": false
+  },
+  {
+    "id": "og-0739",
+    "nameEs": "Prensa de Piernas Inclinada 45°",
+    "nameEn": "sled 45в° leg press",
+    "aliases": [
+      "Prensa",
+      "Leg Press",
+      "Prensa 45",
+      "Prensa de Piernas",
+      "sled 45в° leg press",
+      "Prensa de Piernas Inclinada 45°",
+      "Cuádriceps con Máquina"
+    ],
+    "primaryMuscle": "Cuádriceps",
+    "secondaryMuscles": [
+      "Glúteos",
+      "Isquiotibiales"
+    ],
+    "equipment": "Máquina",
+    "category": "hipertrofia",
+    "images": [
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/images/0739-10Z2DXU.jpg",
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/videos/0739-10Z2DXU.gif"
+    ],
+    "instructionsEs": [
+      "Apoya toda la espalda y el sacro firmemente contra el respaldo de la prensa y coloca los pies en la plataforma al ancho de caderas.",
+      "Desbloquea los seguros y desciende la plataforma controladamente flexionando rodillas al máximo rango sin despegar el sacro del asiento.",
+      "Empuja la plataforma con toda la planta del pie evitando bloquear agresivamente las rodillas al final."
+    ],
+    "isUnilateral": false
+  },
+  {
+    "id": "og-0585",
+    "nameEs": "Extensión de Cuádriceps en Máquina",
+    "nameEn": "lever leg extension",
+    "aliases": [
+      "Sillón de Cuádriceps",
+      "Leg Extension",
+      "Extensiones de Cuádriceps",
+      "lever leg extension",
+      "Extensión de Cuádriceps en Máquina",
+      "Cuádriceps con Máquina"
+    ],
+    "primaryMuscle": "Cuádriceps",
+    "secondaryMuscles": [],
+    "equipment": "Máquina",
+    "category": "hipertrofia",
+    "images": [
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/images/0585-my33uHU.jpg",
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/videos/0585-my33uHU.gif"
+    ],
+    "instructionsEs": [
+      "Alinea el eje de rotación de la máquina con tu articulación de la rodilla y ajusta el rodillo sobre el empeine inferior.",
+      "Sujeta los agarres laterales para mantener la cadera pegada al asiento y extiende las rodillas por completo.",
+      "Realiza una pausa isométrica de 1 segundo arriba y controla la fase excéntrica durante 2-3 segundos."
+    ],
+    "isUnilateral": false
+  },
+  {
+    "id": "og-0586",
+    "nameEs": "Curl Femoral Tumbado en Máquina",
+    "nameEn": "lever lying leg curl",
+    "aliases": [
+      "Camilla de Isquios",
+      "Lying Leg Curl",
+      "Curl Femoral",
+      "Isquios en Máquina",
+      "lever lying leg curl",
+      "Curl Femoral Tumbado en Máquina",
+      "Isquiotibiales con Máquina"
+    ],
+    "primaryMuscle": "Isquiotibiales",
+    "secondaryMuscles": [
+      "Gemelos / Pantorrillas"
+    ],
+    "equipment": "Máquina",
+    "category": "hipertrofia",
+    "images": [
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/images/0586-17lJ1kr.jpg",
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/videos/0586-17lJ1kr.gif"
+    ],
+    "instructionsEs": [
+      "Túmbate boca abajo manteniendo la pelvis presionada contra el banco para evitar compensar con la zona lumbar.",
+      "Flexiona las rodillas llevando el rodillo hacia los glúteos en fase concéntrica explosiva.",
+      "Desciende la carga lentamente resistiendo la extensión hasta el estiramiento completo."
+    ],
+    "isUnilateral": false
+  },
+  {
+    "id": "og-0336",
+    "nameEs": "Sentadilla Búlgara con Mancuernas",
+    "nameEn": "dumbbell lunge",
+    "aliases": [
+      "Sentadilla Búlgara",
+      "Bulgarian Split Squat",
+      "Zancada Búlgara",
+      "dumbbell lunge",
+      "Sentadilla Búlgara con Mancuernas",
+      "Glúteos con Mancuerna"
+    ],
+    "primaryMuscle": "Glúteos",
+    "secondaryMuscles": [
+      "Cuádriceps",
+      "Isquiotibiales"
+    ],
+    "equipment": "Mancuerna",
+    "category": "hipertrofia",
+    "images": [
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/images/0336-RRWFUcw.jpg",
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/videos/0336-RRWFUcw.gif"
+    ],
+    "instructionsEs": [
+      "Apoya el empeine del pie trasero en un banco y da un paso adelante con la pierna de trabajo.",
+      "Desciende flexionando la rodilla delantera (torso erguido para énfasis en cuádriceps o ligeramente inclinado para énfasis en glúteo).",
+      "Empuja con el talón y mediopié delantero hasta recuperar la posición inicial."
+    ],
+    "isUnilateral": true
+  },
+  {
+    "id": "og-0605",
+    "nameEs": "Elevación de Talones para Gemelos",
+    "nameEn": "lever standing calf raise",
+    "aliases": [
+      "Gemelos",
+      "Calf Raise",
+      "Pantorrillas de Pie",
+      "lever standing calf raise",
+      "Elevación de Talones para Gemelos",
+      "Gemelos / Pantorrillas con Máquina"
+    ],
+    "primaryMuscle": "Gemelos / Pantorrillas",
+    "secondaryMuscles": [],
+    "equipment": "Máquina",
+    "category": "hipertrofia",
+    "images": [
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/images/0605-ykUOVze.jpg",
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/videos/0605-ykUOVze.gif"
+    ],
+    "instructionsEs": [
+      "Coloca los metatarsos sobre el escalón dejando los talones libres para recorrer todo el rango articular del tobillo.",
+      "Desciende los talones pausando 1-2 segundos en el estiramiento inferior para disipar el reflejo miotático del tendón de Aquiles.",
+      "Eleva los talones al máximo en flexión plantar y sostén 1 segundo arriba."
+    ],
+    "isUnilateral": false
+  },
+  {
+    "id": "og-0651",
+    "nameEs": "Dominadas Pronas (Pull-Up)",
+    "nameEn": "pull up (neutral grip)",
+    "aliases": [
+      "Dominadas",
+      "Pull Up",
+      "Pull-ups",
+      "Chin Up",
+      "pull up (neutral grip)",
+      "Dominadas Pronas (Pull-Up)",
+      "Espalda / Dorsales con Peso Corporal"
+    ],
+    "primaryMuscle": "Espalda / Dorsales",
+    "secondaryMuscles": [
+      "Bíceps",
+      "Abdominales / Core",
+      "Trapecios"
+    ],
+    "equipment": "Peso Corporal",
+    "category": "calistenia",
+    "images": [
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/images/0651-0V2YQjW.jpg",
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/videos/0651-0V2YQjW.gif"
+    ],
+    "instructionsEs": [
+      "Cuélgate de la barra con agarre prono completo y activa el core para evitar balanceos (kipping).",
+      "Deprime y retrae las escápulas traccionando con los codos hacia el torso hasta pasar la barbilla por encima de la barra.",
+      "Desciende en fase excéntrica controlada hasta la extensión completa de los brazos (dead hang activo)."
+    ],
+    "isUnilateral": false
+  },
+  {
+    "id": "og-0027",
+    "nameEs": "Remo con Barra Inclinado (Pendlay / Prono)",
+    "nameEn": "barbell bent over row",
+    "aliases": [
+      "Remo con Barra",
+      "Barbell Row",
+      "Bent Over Row",
+      "Remo 90",
+      "barbell bent over row",
+      "Remo con Barra Inclinado (Pendlay / Prono)",
+      "Espalda / Dorsales con Barra"
+    ],
+    "primaryMuscle": "Espalda / Dorsales",
+    "secondaryMuscles": [
+      "Trapecios",
+      "Espalda Baja / Lumbares",
+      "Bíceps"
+    ],
+    "equipment": "Barra",
+    "category": "fuerza",
+    "images": [
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/images/0027-eZyBC3j.jpg",
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/videos/0027-eZyBC3j.gif"
+    ],
+    "instructionsEs": [
+      "Inclina el torso entre 45° y 75° mediante bisagra de cadera manteniendo la columna neutra y el abdomen firme.",
+      "Tracciona la barra hacia la zona umbilical / esternón inferior guiando el movimiento con los codos y retrayendo las escápulas.",
+      "Baja la barra controladamente sin perder el ángulo del torso."
+    ],
+    "isUnilateral": false
+  },
+  {
+    "id": "og-0292",
+    "nameEs": "Remo Unilateral con Mancuerna (Serrucho)",
+    "nameEn": "dumbbell one arm bent-over row",
+    "aliases": [
+      "Remo con Mancuerna",
+      "One Arm Dumbbell Row",
+      "Remo Serrucho",
+      "dumbbell one arm bent-over row",
+      "Remo Unilateral con Mancuerna (Serrucho)",
+      "Espalda / Dorsales con Mancuerna"
+    ],
+    "primaryMuscle": "Espalda / Dorsales",
+    "secondaryMuscles": [
+      "Bíceps",
+      "Trapecios"
+    ],
+    "equipment": "Mancuerna",
+    "category": "hipertrofia",
+    "images": [
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/images/0292-C0MA9bC.jpg",
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/videos/0292-C0MA9bC.gif"
+    ],
+    "instructionsEs": [
+      "Apoya una mano y rodilla en el banco manteniendo la espalda plana y paralela al suelo.",
+      "Deje que la mancuerna estire el dorsal abajo y luego tracciona en arco llevando la mancuerna hacia la cadera (no hacia el hombro).",
+      "Controla el descenso sintiendo el estiramiento del dorsal ancho."
+    ],
+    "isUnilateral": true
+  },
+  {
+    "id": "og-0426",
+    "nameEs": "Press Militar de Pie con Barra (Overhead Press)",
+    "nameEn": "dumbbell standing overhead press",
+    "aliases": [
+      "Press Militar",
+      "OHP",
+      "Overhead Press",
+      "Shoulder Press Barra",
+      "dumbbell standing overhead press",
+      "Press Militar de Pie con Barra (Overhead Press)",
+      "Hombros (Deltoides) con Barra"
+    ],
+    "primaryMuscle": "Hombros (Deltoides)",
+    "secondaryMuscles": [
+      "Tríceps",
+      "Abdominales / Core",
+      "Trapecios"
+    ],
+    "equipment": "Barra",
+    "category": "fuerza",
+    "images": [
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/images/0426-A6wtbuL.jpg",
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/videos/0426-A6wtbuL.gif"
+    ],
+    "instructionsEs": [
+      "Sujeta la barra apoyada sobre los deltoides anteriores con los glúteos y abdomen fuertemente contraídos.",
+      "Empuja la barra verticalmente apartando ligeramente el rostro y encajando la cabeza bajo la barra al pasar la frente.",
+      "Desciende la barra de forma controlada hasta la altura de las clavículas."
+    ],
+    "isUnilateral": false
+  },
+  {
+    "id": "og-0405",
+    "nameEs": "Press de Hombros Sentado con Mancuernas",
+    "nameEn": "dumbbell seated shoulder press",
+    "aliases": [
+      "Press Hombros Mancuernas",
+      "Seated Dumbbell Shoulder Press",
+      "Press Militar Mancuernas",
+      "dumbbell seated shoulder press",
+      "Press de Hombros Sentado con Mancuernas",
+      "Hombros (Deltoides) con Mancuerna"
+    ],
+    "primaryMuscle": "Hombros (Deltoides)",
+    "secondaryMuscles": [
+      "Tríceps"
+    ],
+    "equipment": "Mancuerna",
+    "category": "hipertrofia",
+    "images": [
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/images/0405-znQUdHY.jpg",
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/videos/0405-znQUdHY.gif"
+    ],
+    "instructionsEs": [
+      "Siéntate con la espalda apoyada en un banco a 75-85° y sube las mancuernas a la altura de las orejas en el plano escapular (30° hacia adelante).",
+      "Empuja verticalmente sin entrechocar las mancuernas y desciende controladamente hasta que los codos pasen ligeramente los 90°."
+    ],
+    "isUnilateral": true
+  },
+  {
+    "id": "og-0334",
+    "nameEs": "Elevaciones Laterales con Mancuernas",
+    "nameEn": "dumbbell lateral raise",
+    "aliases": [
+      "Elevaciones Laterales",
+      "Lateral Raise",
+      "Vuelos Laterales",
+      "Deltoides Lateral",
+      "dumbbell lateral raise",
+      "Elevaciones Laterales con Mancuernas",
+      "Hombros (Deltoides) con Mancuerna"
+    ],
+    "primaryMuscle": "Hombros (Deltoides)",
+    "secondaryMuscles": [
+      "Trapecios"
+    ],
+    "equipment": "Mancuerna",
+    "category": "hipertrofia",
+    "images": [
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/images/0334-DsgkuIt.jpg",
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/videos/0334-DsgkuIt.gif"
+    ],
+    "instructionsEs": [
+      "De pie con una ligera inclinación del torso hacia adelante, eleva las mancuernas en el plano escapular (unos 20-30° por delante del cuerpo).",
+      "Piensa en lanzar las mancuernas lejos hacia los lados guiando con los codos hasta la altura de los hombros.",
+      "Baja en 2-3 segundos manteniendo tensión constante sin dejar caer los brazos muertos."
+    ],
+    "isUnilateral": true
+  },
+  {
+    "id": "og-0031",
+    "nameEs": "Curl de Bíceps con Barra Recta / Barra Z",
+    "nameEn": "barbell curl",
+    "aliases": [
+      "Curl con Barra",
+      "Barbell Curl",
+      "EZ Bar Curl",
+      "Bíceps con Barra",
+      "barbell curl",
+      "Curl de Bíceps con Barra Recta / Barra Z"
+    ],
+    "primaryMuscle": "Bíceps",
+    "secondaryMuscles": [
+      "Antebrazos"
+    ],
+    "equipment": "Barra",
+    "category": "hipertrofia",
+    "images": [
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/images/0031-25GPyDY.jpg",
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/videos/0031-25GPyDY.gif"
+    ],
+    "instructionsEs": [
+      "De pie con los codos pegados a los costados del torso, sujeta la barra en supinación al ancho de los hombros.",
+      "Flexiona los codos contrayendo los bíceps sin balancear la cadera ni adelantar excesivamente los hombros.",
+      "Desciende la barra controlando los 2-3 segundos de fase excéntrica hasta estirar el bíceps."
+    ],
+    "isUnilateral": false
+  },
+  {
+    "id": "og-0313",
+    "nameEs": "Curl Martillo con Mancuernas (Hammer Curl)",
+    "nameEn": "dumbbell hammer curl",
+    "aliases": [
+      "Curl Martillo",
+      "Hammer Curl",
+      "Braquial Mancuernas",
+      "dumbbell hammer curl",
+      "Curl Martillo con Mancuernas (Hammer Curl)",
+      "Bíceps con Mancuerna"
+    ],
+    "primaryMuscle": "Bíceps",
+    "secondaryMuscles": [
+      "Antebrazos"
+    ],
+    "equipment": "Mancuerna",
+    "category": "hipertrofia",
+    "images": [
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/images/0313-slDvUAU.jpg",
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/videos/0313-slDvUAU.gif"
+    ],
+    "instructionsEs": [
+      "Sostén las mancuernas con agarre neutro (palmas enfrentadas) para enfatizar el braquial anterior y el supinador largo.",
+      "Flexiona los codos manteniendo las muñecas firmes y desciende pausadamente."
+    ],
+    "isUnilateral": true
+  },
+  {
+    "id": "og-0241",
+    "nameEs": "Extensión de Tríceps en Polea Alta (Pushdown)",
+    "nameEn": "cable triceps pushdown (v-bar)",
+    "aliases": [
+      "Extensión de Tríceps",
+      "Tricep Pushdown",
+      "Tríceps en Polea",
+      "Cuerda Tríceps",
+      "cable triceps pushdown (v-bar)",
+      "Extensión de Tríceps en Polea Alta (Pushdown)",
+      "Tríceps con Polea"
+    ],
+    "primaryMuscle": "Tríceps",
+    "secondaryMuscles": [],
+    "equipment": "Polea",
+    "category": "hipertrofia",
+    "images": [
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/images/0241-gAwDzB3.jpg",
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/videos/0241-gAwDzB3.gif"
+    ],
+    "instructionsEs": [
+      "Fija los codos a los costados del cuerpo e inclina ligeramente el torso hacia adelante.",
+      "Extiende únicamente la articulación del codo llevando la cuerda o barra hacia los muslos y bloqueando abajo 1 segundo.",
+      "Permite la flexión controlada de los codos sin que estos se desplacen hacia arriba."
+    ],
+    "isUnilateral": false
+  },
+  {
+    "id": "og-0251",
+    "nameEs": " Fondos en Paralelas / Press Francés (Tríceps)",
+    "nameEn": "chest dip",
+    "aliases": [
+      "Press Francés",
+      "Skullcrusher",
+      "Fondos Tríceps",
+      "Extensión Tríceps Barra",
+      "chest dip",
+      " Fondos en Paralelas / Press Francés (Tríceps)",
+      "Tríceps con Peso Corporal"
+    ],
+    "primaryMuscle": "Tríceps",
+    "secondaryMuscles": [
+      "Pecho",
+      "Hombros (Deltoides)"
+    ],
+    "equipment": "Peso Corporal",
+    "category": "hipertrofia",
+    "images": [
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/images/0251-9WTm7dq.jpg",
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/videos/0251-9WTm7dq.gif"
+    ],
+    "instructionsEs": [
+      "Mantén los húmeros estables y enfoca el movimiento en la flexo-extensión de los codos para estirar la cabeza larga del tríceps.",
+      "Controla la bajada y extiende con potencia evitando abrir los codos."
+    ],
+    "isUnilateral": false
+  },
+  {
+    "id": "og-0007",
+    "nameEs": "Alternate lateral Jalón",
+    "nameEn": "alternate lateral pulldown",
+    "aliases": [
+      "alternate lateral pulldown",
+      "Alternate lateral Jalón",
+      "Espalda / Dorsales con Polea"
+    ],
+    "primaryMuscle": "Espalda / Dorsales",
+    "secondaryMuscles": [
+      "Bíceps",
+      "Abdominales / Core"
+    ],
+    "equipment": "Polea",
+    "category": "hipertrofia",
+    "images": [
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/images/0007-4IKbhHV.jpg",
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/videos/0007-4IKbhHV.gif"
+    ],
+    "instructionsEs": [
+      "Siéntate en la máquina de cable con la espalda recta y los pies apoyados en el suelo.",
+      "Agarra las agarraderas con un agarre prono, un poco más separadas que el ancho de los hombros.",
+      "Inclínate ligeramente hacia atrás y lleva las agarraderas hacia el pecho, juntando los omóplatos.",
+      "Haz una pausa por un momento en el punto máximo del movimiento, luego suelta lentamente las agarraderas de vuelta a la posición inicial.",
+      "Repite el número de repeticiones deseado."
+    ],
+    "isUnilateral": true
+  },
+  {
+    "id": "og-0009",
+    "nameEs": "Assisted chest dip (kneeling)",
+    "nameEn": "assisted chest dip (kneeling)",
+    "aliases": [
+      "assisted chest dip (kneeling)",
+      "Assisted chest dip (kneeling)",
+      "Pecho con Máquina"
+    ],
+    "primaryMuscle": "Pecho",
+    "secondaryMuscles": [
+      "Tríceps",
+      "Hombros (Deltoides)"
+    ],
+    "equipment": "Máquina",
+    "category": "hipertrofia",
+    "images": [
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/images/0009-PAgTVaK.jpg",
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/videos/0009-PAgTVaK.gif"
+    ],
+    "instructionsEs": [
+      "Ajusta la máquina a la altura deseada y asegura las rodillas sobre la almohadilla.",
+      "Agarra las agarraderas con las palmas hacia abajo y los brazos completamente extendidos.",
+      "Baja el cuerpo flexionando los codos hasta que los brazos queden paralelos al suelo.",
+      "Haz una pausa por un momento, luego empuja tu cuerpo de vuelta a la posición inicial.",
+      "Repite el número de repeticiones deseado."
+    ],
+    "isUnilateral": false
+  },
+  {
+    "id": "og-0015",
+    "nameEs": "Assisted parallel close grip Dominada",
+    "nameEn": "assisted parallel close grip pull-up",
+    "aliases": [
+      "assisted parallel close grip pull-up",
+      "Assisted parallel close grip Dominada",
+      "Espalda / Dorsales con Máquina"
+    ],
+    "primaryMuscle": "Espalda / Dorsales",
+    "secondaryMuscles": [
+      "Bíceps",
+      "Antebrazos"
+    ],
+    "equipment": "Máquina",
+    "category": "hipertrofia",
+    "images": [
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/images/0015-vrhHa6D.jpg",
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/videos/0015-vrhHa6D.gif"
+    ],
+    "instructionsEs": [
+      "Ajusta la máquina al peso y la altura deseados.",
+      "Coloca las manos en las barras paralelas con un agarre cerrado, con las palmas mirándose entre sí.",
+      "Cuélgate de las barras con los brazos completamente extendidos y los pies sin tocar el suelo.",
+      "Activa los músculos de la espalda y lleva el cuerpo hacia arriba hacia las barras, manteniendo los codos cerca del cuerpo.",
+      "Continúa subiendo hasta que la barbilla quede por encima de las barras.",
+      "Haz una pausa por un momento en la parte superior, luego baja lentamente el cuerpo de vuelta a la posición inicial.",
+      "Repite el número de repeticiones deseado."
+    ],
+    "isUnilateral": false
+  },
+  {
+    "id": "og-0017",
+    "nameEs": "Assisted Dominada",
+    "nameEn": "assisted pull-up",
+    "aliases": [
+      "assisted pull-up",
+      "Assisted Dominada",
+      "Espalda / Dorsales con Máquina"
+    ],
+    "primaryMuscle": "Espalda / Dorsales",
+    "secondaryMuscles": [
+      "Bíceps",
+      "Antebrazos"
+    ],
+    "equipment": "Máquina",
+    "category": "hipertrofia",
+    "images": [
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/images/0017-kiJ4Z2K.jpg",
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/videos/0017-kiJ4Z2K.gif"
+    ],
+    "instructionsEs": [
+      "Ajusta la máquina a los valores de peso y altura deseados.",
+      "Agarra las agarraderas con un agarre prono, un poco más separadas que el ancho de los hombros.",
+      "Cuélgate con los brazos completamente extendidos y los pies sin tocar el suelo.",
+      "Activa los músculos de la espalda y lleva el cuerpo hacia arriba hacia las agarraderas, manteniendo los codos cerca del cuerpo.",
+      "Continúa subiendo hasta que la barbilla quede por encima de las agarraderas.",
+      "Haz una pausa por un momento en la parte superior, luego baja lentamente el cuerpo de vuelta a la posición inicial.",
+      "Repite el número de repeticiones deseado."
+    ],
+    "isUnilateral": false
+  },
+  {
+    "id": "og-1431",
+    "nameEs": "Assisted de Pie chin-up",
+    "nameEn": "assisted standing chin-up",
+    "aliases": [
+      "assisted standing chin-up",
+      "Assisted de Pie chin-up",
+      "Espalda / Dorsales con Máquina"
+    ],
+    "primaryMuscle": "Espalda / Dorsales",
+    "secondaryMuscles": [
+      "Bíceps",
+      "Antebrazos"
+    ],
+    "equipment": "Máquina",
+    "category": "hipertrofia",
+    "images": [
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/images/1431-7OeHptV.jpg",
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/videos/1431-7OeHptV.gif"
+    ],
+    "instructionsEs": [
+      "Ajusta la máquina al nivel de asistencia deseado.",
+      "Sube a la plataforma para los pies y agarra las agarraderas con un agarre prono, un poco más separadas que el ancho de los hombros.",
+      "Mantén el pecho arriba y los hombros atrás, activa el core y flexiona ligeramente las rodillas.",
+      "Levanta el cuerpo flexionando los codos y llevándolos hacia abajo, en dirección a los costados.",
+      "Continúa subiendo hasta que la barbilla quede por encima de la barra.",
+      "Haz una pausa por un momento en la parte superior, luego baja lentamente el cuerpo de vuelta a la posición inicial.",
+      "Repite el número de repeticiones deseado."
+    ],
+    "isUnilateral": false
+  },
+  {
+    "id": "og-1432",
+    "nameEs": "Assisted de Pie Dominada",
+    "nameEn": "assisted standing pull-up",
+    "aliases": [
+      "assisted standing pull-up",
+      "Assisted de Pie Dominada",
+      "Espalda / Dorsales con Máquina"
+    ],
+    "primaryMuscle": "Espalda / Dorsales",
+    "secondaryMuscles": [
+      "Bíceps",
+      "Antebrazos"
+    ],
+    "equipment": "Máquina",
+    "category": "hipertrofia",
+    "images": [
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/images/1432-f4xtKBj.jpg",
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/videos/1432-f4xtKBj.gif"
+    ],
+    "instructionsEs": [
+      "Ajusta la máquina a los valores de peso y altura deseados.",
+      "Ponte de pie frente a la máquina con los pies separados a la altura de los hombros.",
+      "Agarra las agarraderas con un agarre prono, un poco más separadas que el ancho de los hombros.",
+      "Activa los dorsales y los bíceps, y levántate hacia las agarraderas.",
+      "Haz una pausa por un momento en la parte superior, apretando los músculos de la espalda.",
+      "Bájate lentamente de vuelta a la posición inicial.",
+      "Repite el número de repeticiones deseado."
+    ],
+    "isUnilateral": false
+  },
+  {
+    "id": "og-0019",
+    "nameEs": "Assisted triceps dip (kneeling)",
+    "nameEn": "assisted triceps dip (kneeling)",
+    "aliases": [
+      "assisted triceps dip (kneeling)",
+      "Assisted triceps dip (kneeling)",
+      "Tríceps con Máquina"
+    ],
+    "primaryMuscle": "Tríceps",
+    "secondaryMuscles": [
+      "Pecho",
+      "Hombros (Deltoides)"
+    ],
+    "equipment": "Máquina",
+    "category": "hipertrofia",
+    "images": [
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/images/0019-J60bN17.jpg",
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/videos/0019-J60bN17.gif"
+    ],
+    "instructionsEs": [
+      "Ajusta la máquina al peso y la altura deseados.",
+      "Arrodíllate sobre la almohadilla frente a la máquina, con las manos sujetando las agarraderas.",
+      "Baja el cuerpo flexionando los codos, manteniendo la espalda recta y cerca de la máquina.",
+      "Haz una pausa por un momento en la parte inferior, luego empuja tu cuerpo de vuelta a la posición inicial.",
+      "Repite el número de repeticiones deseado."
+    ],
+    "isUnilateral": false
+  },
+  {
+    "id": "og-2364",
+    "nameEs": "Assisted wide-grip chest dip (kneeling)",
+    "nameEn": "assisted wide-grip chest dip (kneeling)",
+    "aliases": [
+      "assisted wide-grip chest dip (kneeling)",
+      "Assisted wide-grip chest dip (kneeling)",
+      "Pecho con Máquina"
+    ],
+    "primaryMuscle": "Pecho",
+    "secondaryMuscles": [
+      "Tríceps",
+      "Hombros (Deltoides)"
+    ],
+    "equipment": "Máquina",
+    "category": "hipertrofia",
+    "images": [
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/images/2364-PnZJIrk.jpg",
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/videos/2364-PnZJIrk.gif"
+    ],
+    "instructionsEs": [
+      "Ajusta la máquina a la altura deseada y asegura las rodillas sobre la almohadilla.",
+      "Agarra las agarraderas con un agarre amplio y mantén los codos ligeramente flexionados.",
+      "Baja el cuerpo flexionando los codos hasta que los brazos queden paralelos al suelo.",
+      "Empuja tu cuerpo de vuelta a la posición inicial extendiendo los brazos.",
+      "Repite el número de repeticiones deseado."
+    ],
+    "isUnilateral": false
+  },
+  {
+    "id": "og-0023",
+    "nameEs": "Con Barra alternate biceps Curl",
+    "nameEn": "barbell alternate biceps curl",
+    "aliases": [
+      "barbell alternate biceps curl",
+      "Con Barra alternate biceps Curl",
+      "Bíceps con Barra"
+    ],
+    "primaryMuscle": "Bíceps",
+    "secondaryMuscles": [
+      "Antebrazos"
+    ],
+    "equipment": "Barra",
+    "category": "fuerza",
+    "images": [
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/images/0023-Yza7XrQ.jpg",
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/videos/0023-Yza7XrQ.gif"
+    ],
+    "instructionsEs": [
+      "Ponte de pie con los pies separados a la altura de los hombros y sujeta una barra en cada mano, con las palmas mirando hacia delante.",
+      "Mantén los brazos superiores fijos y exhala mientras levantas el peso contrayendo los bíceps.",
+      "Continúa levantando las barras hasta que los bíceps estén completamente contraídos y las barras estén a la altura de los hombros.",
+      "Mantén la posición contraída durante una breve pausa mientras aprietas los bíceps.",
+      "Inhala mientras comienzas a bajar lentamente las barras de vuelta a la posición inicial.",
+      "Repite el número de repeticiones deseado, alternando los brazos."
+    ],
+    "isUnilateral": true
+  },
+  {
+    "id": "og-0024",
+    "nameEs": "Con Barra bench front Sentadilla",
+    "nameEn": "barbell bench front squat",
+    "aliases": [
+      "barbell bench front squat",
+      "Con Barra bench front Sentadilla",
+      "Cuádriceps con Barra"
+    ],
+    "primaryMuscle": "Cuádriceps",
+    "secondaryMuscles": [
+      "Isquiotibiales",
+      "Glúteos",
+      "Gemelos / Pantorrillas"
+    ],
+    "equipment": "Barra",
+    "category": "fuerza",
+    "images": [
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/images/0024-Y7YcmIJ.jpg",
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/videos/0024-Y7YcmIJ.gif"
+    ],
+    "instructionsEs": [
+      "Empieza de pie con los pies separados a la altura de los hombros y la barra apoyada en la parte superior del pecho, justo debajo de la clavícula.",
+      "Sujeta la barra con un agarre pronado, manteniendo los codos elevados y los brazos superiores paralelos al suelo.",
+      "Baja el cuerpo hacia una posición de sentadilla flexionando las rodillas y las caderas, manteniendo la espalda recta y el pecho elevado.",
+      "Haz una pausa breve en la parte baja de la sentadilla y luego empuja con los talones para volver a la posición inicial.",
+      "Repite el número de repeticiones deseado."
+    ],
+    "isUnilateral": false
+  },
+  {
+    "id": "og-0026",
+    "nameEs": "Con Barra bench Sentadilla",
+    "nameEn": "barbell bench squat",
+    "aliases": [
+      "barbell bench squat",
+      "Con Barra bench Sentadilla",
+      "Cuádriceps con Barra"
+    ],
+    "primaryMuscle": "Cuádriceps",
+    "secondaryMuscles": [
+      "Glúteos",
+      "Isquiotibiales",
+      "Gemelos / Pantorrillas"
+    ],
+    "equipment": "Barra",
+    "category": "fuerza",
+    "images": [
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/images/0026-W9pFVv1.jpg",
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/videos/0026-W9pFVv1.gif"
+    ],
+    "instructionsEs": [
+      "Coloca una barra en un soporte de sentadillas a la altura del pecho.",
+      "Ponte de pie de espaldas al soporte, con los pies separados a la altura de los hombros.",
+      "Flexiona las rodillas y baja el cuerpo hacia una posición de sentadilla, manteniendo la espalda recta y el pecho elevado.",
+      "Agarra la barra con un agarre pronado un poco más ancho que la separación de los hombros.",
+      "Levanta la barra del soporte y retrocede un paso, asegurándote de que los pies sigan separados a la altura de los hombros.",
+      "Baja el cuerpo hacia una sentadilla, manteniendo las rodillas alineadas con los dedos de los pies.",
+      "Haz una pausa por un momento en la parte inferior, luego empuja con los talones para regresar a la posición inicial.",
+      "Repite el número de repeticiones deseado."
+    ],
+    "isUnilateral": false
+  },
+  {
+    "id": "og-1316",
+    "nameEs": "Con Barra bent arm pullover",
+    "nameEn": "barbell bent arm pullover",
+    "aliases": [
+      "barbell bent arm pullover",
+      "Con Barra bent arm pullover",
+      "Espalda / Dorsales con Barra"
+    ],
+    "primaryMuscle": "Espalda / Dorsales",
+    "secondaryMuscles": [
+      "Tríceps",
+      "Pecho"
+    ],
+    "equipment": "Barra",
+    "category": "fuerza",
+    "images": [
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/images/1316-cA9FuWG.jpg",
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/videos/1316-cA9FuWG.gif"
+    ],
+    "instructionsEs": [
+      "Túmbate boca arriba en un banco con la cabeza en un extremo y los pies en el suelo.",
+      "Sujeta una barra con un agarre a la altura de los hombros y extiende los brazos rectos por encima del pecho.",
+      "Baja la barra detrás de la cabeza manteniendo los brazos ligeramente flexionados.",
+      "Haz una pausa breve y luego levanta la barra de vuelta a la posición inicial.",
+      "Repite el número de repeticiones deseado."
+    ],
+    "isUnilateral": false
+  },
+  {
+    "id": "og-2407",
+    "nameEs": "Con Barra biceps Curl (with arm blaster)",
+    "nameEn": "barbell biceps curl (with arm blaster)",
+    "aliases": [
+      "barbell biceps curl (with arm blaster)",
+      "Con Barra biceps Curl (with arm blaster)",
+      "Bíceps con Barra"
+    ],
+    "primaryMuscle": "Bíceps",
+    "secondaryMuscles": [
+      "Antebrazos"
+    ],
+    "equipment": "Barra",
+    "category": "fuerza",
+    "images": [
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/images/2407-aee2Fcj.jpg",
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/videos/2407-aee2Fcj.gif"
+    ],
+    "instructionsEs": [
+      "Ponte de pie con los pies separados a la altura de los hombros y sujeta una barra con un agarre supino, con las palmas hacia arriba.",
+      "Coloca los brazos superiores contra el soporte para brazos, manteniendo los codos cerca del torso.",
+      "Manteniendo los brazos superiores fijos, exhala y levanta el peso mientras contraes los bíceps.",
+      "Continúa levantando la barra hasta que los bíceps estén completamente contraídos y la barra esté a la altura de los hombros.",
+      "Mantén la posición contraída durante una breve pausa mientras aprietas los bíceps.",
+      "Inhala y comienza a bajar lentamente la barra de vuelta a la posición inicial.",
+      "Repite el número de repeticiones deseado."
+    ],
+    "isUnilateral": false
+  },
+  {
+    "id": "og-0028",
+    "nameEs": "Con Barra clean and Press",
+    "nameEn": "barbell clean and press",
+    "aliases": [
+      "barbell clean and press",
+      "Con Barra clean and Press",
+      "Cuádriceps con Barra"
+    ],
+    "primaryMuscle": "Cuádriceps",
+    "secondaryMuscles": [
+      "Isquiotibiales",
+      "Glúteos",
+      "Hombros (Deltoides)",
+      "Tríceps"
+    ],
+    "equipment": "Barra",
+    "category": "fuerza",
+    "images": [
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/images/0028-SGY8Zui.jpg",
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/videos/0028-SGY8Zui.gif"
+    ],
+    "instructionsEs": [
+      "Ponte de pie con los pies separados a la altura de los hombros y la barra en el suelo frente a ti.",
+      "Flexiona las rodillas y las caderas para bajar y agarrar la barra con un agarre pronado, con las manos un poco más separadas que el ancho de los hombros.",
+      "Empuja con los talones y extiende las caderas y las rodillas para levantar la barra del suelo, manteniéndola cerca del cuerpo.",
+      "Cuando la barra llegue a los muslos, extiende las caderas de forma explosiva, encoge los hombros y tira de la barra hacia el pecho.",
+      "Cuando la barra llegue a la altura del pecho, baja rápidamente debajo de ella y atrápala a la altura de los hombros, con los codos apuntando hacia delante y las palmas hacia arriba.",
+      "Desde la posición de recepción, empuja la barra por encima de la cabeza extendiendo los brazos y llevando la barra recta hacia arriba.",
+      "Baja la barra de vuelta a la posición inicial y repite el número de repeticiones deseado."
+    ],
+    "isUnilateral": false
+  },
+  {
+    "id": "og-0029",
+    "nameEs": "Con Barra clean-grip front Sentadilla",
+    "nameEn": "barbell clean-grip front squat",
+    "aliases": [
+      "barbell clean-grip front squat",
+      "Con Barra clean-grip front Sentadilla",
+      "Glúteos con Barra"
+    ],
+    "primaryMuscle": "Glúteos",
+    "secondaryMuscles": [
+      "Cuádriceps",
+      "Isquiotibiales",
+      "Gemelos / Pantorrillas",
+      "Abdominales / Core"
+    ],
+    "equipment": "Barra",
+    "category": "fuerza",
+    "images": [
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/images/0029-qi996YS.jpg",
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/videos/0029-qi996YS.gif"
+    ],
+    "instructionsEs": [
+      "Empieza de pie con los pies separados a la altura de los hombros y la barra apoyada en la parte superior del pecho, con los codos apuntando hacia delante.",
+      "Baja el cuerpo flexionando las rodillas y empujando las caderas hacia atrás, como si te sentaras en una silla.",
+      "Mantén el pecho elevado y la espalda recta mientras bajas, asegurándote de que las rodillas no sobrepasen los dedos de los pies.",
+      "Continúa bajando hasta que los muslos queden paralelos al suelo, o tan abajo como puedas hacerlo cómodamente.",
+      "Haz una pausa breve en la parte baja y luego empuja con los talones para volver a ponerte de pie, extendiendo las caderas y las rodillas.",
+      "Repite el número de repeticiones deseado."
+    ],
+    "isUnilateral": false
+  },
+  {
+    "id": "og-0030",
+    "nameEs": "Con Barra close-grip Press de Banca",
+    "nameEn": "barbell close-grip bench press",
+    "aliases": [
+      "barbell close-grip bench press",
+      "Con Barra close-grip Press de Banca",
+      "Tríceps con Barra"
+    ],
+    "primaryMuscle": "Tríceps",
+    "secondaryMuscles": [
+      "Pecho",
+      "Hombros (Deltoides)"
+    ],
+    "equipment": "Barra",
+    "category": "fuerza",
+    "images": [
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/images/0030-J6Dx1Mu.jpg",
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/videos/0030-J6Dx1Mu.gif"
+    ],
+    "instructionsEs": [
+      "Túmbate sobre un banco con los pies apoyados en el suelo y la espalda presionada contra el banco.",
+      "Agarra la barra con un agarre cerrado, un poco más estrecho que el ancho de los hombros.",
+      "Saca la barra del soporte y bájala lentamente hacia el pecho, manteniendo los codos cerca del cuerpo.",
+      "Haz una pausa breve cuando la barra toque el pecho.",
+      "Empuja la barra de vuelta a la posición inicial, extendiendo completamente los brazos.",
+      "Repite el número de repeticiones deseado."
+    ],
+    "isUnilateral": false
+  },
+  {
+    "id": "og-0033",
+    "nameEs": "Con Barra Declinado Press de Banca",
+    "nameEn": "barbell decline bench press",
+    "aliases": [
+      "barbell decline bench press",
+      "Con Barra Declinado Press de Banca",
+      "Pecho con Barra"
+    ],
+    "primaryMuscle": "Pecho",
+    "secondaryMuscles": [
+      "Tríceps",
+      "Hombros (Deltoides)"
+    ],
+    "equipment": "Barra",
+    "category": "fuerza",
+    "images": [
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/images/0033-GrO65fd.jpg",
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/videos/0033-GrO65fd.gif"
+    ],
+    "instructionsEs": [
+      "Túmbate en un banco declinado con los pies sujetos y la cabeza más baja que las caderas.",
+      "Agarra la barra con un agarre pronado un poco más ancho que la separación de los hombros.",
+      "Saca la barra del soporte y bájala lentamente hacia el pecho, manteniendo los codos pegados al cuerpo.",
+      "Haz una pausa breve en la parte baja y luego empuja la barra de vuelta a la posición inicial.",
+      "Repite el número de repeticiones deseado."
+    ],
+    "isUnilateral": false
+  },
+  {
+    "id": "og-0034",
+    "nameEs": "Con Barra Declinado bent arm pullover",
+    "nameEn": "barbell decline bent arm pullover",
+    "aliases": [
+      "barbell decline bent arm pullover",
+      "Con Barra Declinado bent arm pullover",
+      "Espalda / Dorsales con Barra"
+    ],
+    "primaryMuscle": "Espalda / Dorsales",
+    "secondaryMuscles": [
+      "Tríceps",
+      "Pecho"
+    ],
+    "equipment": "Barra",
+    "category": "fuerza",
+    "images": [
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/images/0034-hMEptv0.jpg",
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/videos/0034-hMEptv0.gif"
+    ],
+    "instructionsEs": [
+      "Túmbate en un banco declinado con la cabeza más baja que las caderas y los pies sujetos.",
+      "Sujeta una barra con un agarre pronado (palmas mirando hacia afuera) y extiende los brazos rectos por encima del pecho.",
+      "Baja la barra detrás de la cabeza de forma controlada, manteniendo los brazos ligeramente flexionados.",
+      "Haz una pausa breve y luego levanta la barra de vuelta a la posición inicial contrayendo los dorsales.",
+      "Repite el número de repeticiones deseado."
+    ],
+    "isUnilateral": false
+  },
+  {
+    "id": "og-0035",
+    "nameEs": "Con Barra Declinado close grip to skull Press",
+    "nameEn": "barbell decline close grip to skull press",
+    "aliases": [
+      "barbell decline close grip to skull press",
+      "Con Barra Declinado close grip to skull Press",
+      "Tríceps con Barra"
+    ],
+    "primaryMuscle": "Tríceps",
+    "secondaryMuscles": [
+      "Pecho",
+      "Hombros (Deltoides)"
+    ],
+    "equipment": "Barra",
+    "category": "fuerza",
+    "images": [
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/images/0035-LMGXZn8.jpg",
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/videos/0035-LMGXZn8.gif"
+    ],
+    "instructionsEs": [
+      "Túmbate en un banco declinado con la cabeza más baja que los pies y sujeta una barra con un agarre cerrado.",
+      "Baja la barra hacia la frente flexionando los codos, manteniendo los brazos superiores fijos.",
+      "Haz una pausa breve y luego extiende los brazos para empujar la barra de vuelta a la posición inicial.",
+      "Repite el número de repeticiones deseado."
+    ],
+    "isUnilateral": false
+  },
+  {
+    "id": "og-1255",
+    "nameEs": "Con Barra Declinado pullover",
+    "nameEn": "barbell decline pullover",
+    "aliases": [
+      "barbell decline pullover",
+      "Con Barra Declinado pullover",
+      "Pecho con Barra"
+    ],
+    "primaryMuscle": "Pecho",
+    "secondaryMuscles": [
+      "Tríceps",
+      "Hombros (Deltoides)"
+    ],
+    "equipment": "Barra",
+    "category": "fuerza",
+    "images": [
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/images/1255-9sgNE2O.jpg",
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/videos/1255-9sgNE2O.gif"
+    ],
+    "instructionsEs": [
+      "Túmbate en un banco declinado con la cabeza más baja que las caderas y los pies sujetos.",
+      "Sujeta la barra con un agarre pronado (palmas mirando hacia afuera) y las manos un poco más separadas que el ancho de los hombros.",
+      "Extiende los brazos por encima del pecho, manteniendo una ligera flexión en los codos.",
+      "Baja la barra describiendo un arco detrás de la cabeza, sintiendo un estiramiento en el pecho y los hombros.",
+      "Haz una pausa breve y luego devuelve la barra a la posición inicial invirtiendo el movimiento.",
+      "Repite el número de repeticiones deseado."
+    ],
+    "isUnilateral": false
+  },
+  {
+    "id": "og-0036",
+    "nameEs": "Con Barra Declinado wide-grip Press",
+    "nameEn": "barbell decline wide-grip press",
+    "aliases": [
+      "barbell decline wide-grip press",
+      "Con Barra Declinado wide-grip Press",
+      "Pecho con Barra"
+    ],
+    "primaryMuscle": "Pecho",
+    "secondaryMuscles": [
+      "Tríceps",
+      "Hombros (Deltoides)"
+    ],
+    "equipment": "Barra",
+    "category": "fuerza",
+    "images": [
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/images/0036-hl8DUh8.jpg",
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/videos/0036-hl8DUh8.gif"
+    ],
+    "instructionsEs": [
+      "Túmbate en un banco declinado con los pies sujetos y la cabeza más baja que las caderas.",
+      "Agarra la barra con un agarre amplio, un poco más ancho que la separación de los hombros.",
+      "Baja la barra hacia el pecho, manteniendo los codos hacia los lados.",
+      "Empuja la barra de vuelta a la posición inicial, extendiendo completamente los brazos.",
+      "Repite el número de repeticiones deseado."
+    ],
+    "isUnilateral": false
+  },
+  {
+    "id": "og-0037",
+    "nameEs": "Con Barra Declinado wide-grip pullover",
+    "nameEn": "barbell decline wide-grip pullover",
+    "aliases": [
+      "barbell decline wide-grip pullover",
+      "Con Barra Declinado wide-grip pullover",
+      "Espalda / Dorsales con Barra"
+    ],
+    "primaryMuscle": "Espalda / Dorsales",
+    "secondaryMuscles": [
+      "Tríceps",
+      "Pecho"
+    ],
+    "equipment": "Barra",
+    "category": "fuerza",
+    "images": [
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/images/0037-Hj4FOCd.jpg",
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/videos/0037-Hj4FOCd.gif"
+    ],
+    "instructionsEs": [
+      "Túmbate en un banco declinado con la cabeza más baja que las caderas y los pies sujetos.",
+      "Sujeta una barra con un agarre amplio y extiende los brazos rectos por encima del pecho.",
+      "Baja la barra detrás de la cabeza de forma controlada, manteniendo los brazos rectos.",
+      "Haz una pausa breve y luego levanta la barra de vuelta a la posición inicial.",
+      "Repite el número de repeticiones deseado."
+    ],
+    "isUnilateral": false
+  },
+  {
+    "id": "og-0038",
+    "nameEs": "Con Barra drag Curl",
+    "nameEn": "barbell drag curl",
+    "aliases": [
+      "barbell drag curl",
+      "Con Barra drag Curl",
+      "Bíceps con Barra"
+    ],
+    "primaryMuscle": "Bíceps",
+    "secondaryMuscles": [
+      "Antebrazos"
+    ],
+    "equipment": "Barra",
+    "category": "fuerza",
+    "images": [
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/images/0038-IENzBdA.jpg",
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/videos/0038-IENzBdA.gif"
+    ],
+    "instructionsEs": [
+      "Ponte de pie con los pies separados a la altura de los hombros y sujeta una barra con un agarre supino, con las palmas hacia arriba.",
+      "Deja que la barra cuelgue a la longitud del brazo frente a los muslos.",
+      "Manteniendo los brazos superiores fijos, levanta la barra hacia el pecho contrayendo los bíceps.",
+      "Haz una pausa breve en la parte alta y luego baja lentamente la barra de vuelta a la posición inicial.",
+      "Repite el número de repeticiones deseado."
+    ],
+    "isUnilateral": false
+  },
+  {
+    "id": "og-1370",
+    "nameEs": "Con Barra floor calf Elevación",
+    "nameEn": "barbell floor calf raise",
+    "aliases": [
+      "barbell floor calf raise",
+      "Con Barra floor calf Elevación",
+      "Gemelos / Pantorrillas con Barra"
+    ],
+    "primaryMuscle": "Gemelos / Pantorrillas",
+    "secondaryMuscles": [
+      "Isquiotibiales"
+    ],
+    "equipment": "Barra",
+    "category": "fuerza",
+    "images": [
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/images/1370-2IHEa2T.jpg",
+      "https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main/videos/1370-2IHEa2T.gif"
+    ],
+    "instructionsEs": [
+      "Coloca una barra en el suelo frente a ti.",
+      "Ponte de pie con la parte delantera de los pies sobre el borde de la barra, dejando los talones colgando.",
+      "Sujétate de un objeto estable para mantener el equilibrio si es necesario.",
+      "Levanta los talones lo más alto posible, usando las pantorrillas para elevar el cuerpo.",
+      "Haz una pausa breve en la parte alta y luego baja lentamente los talones de vuelta a la posición inicial.",
+      "Repite el número de repeticiones deseado."
+    ],
+    "isUnilateral": false
+  }
+];
