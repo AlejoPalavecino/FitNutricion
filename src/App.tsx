@@ -5,7 +5,6 @@ import {
   Dumbbell,
   LogOut,
   Plus,
-  RotateCcw,
   Scale,
   Search,
   SlidersHorizontal,
@@ -39,30 +38,35 @@ export function App() {
   const userProfile = useNutritionStore((s) => s.userProfile);
   const biometricLogs = useNutritionStore((s) => s.biometricLogs);
   const timelineLogs = useNutritionStore((s) => s.timelineLogs);
+  const workoutRoutines = useNutritionStore((s) => s.workoutRoutines);
   const workoutSessions = useNutritionStore((s) => s.workoutSessions);
   const selectedDate = useNutritionStore((s) => s.selectedDate);
   const addOrUpdateBiometricLog = useNutritionStore(
     (s) => s.addOrUpdateBiometricLog
-  );
-  const resetStoreToOnboarding = useNutritionStore(
-    (s) => s.resetStoreToOnboarding
   );
 
   useEffect(() => {
     void initializeAuth();
   }, [initializeAuth]);
 
+  const hasCompletedOnboarding = Boolean(userProfile?.onboardingCompleted);
+
   const [activeTab, setActiveTab] = useState<MainAppTab>(
-    userProfile?.onboardingCompleted ? 'gym' : 'onboarding'
+    hasCompletedOnboarding ? 'gym' : 'onboarding'
   );
-  const hasAutoRedirected = useRef(Boolean(userProfile?.onboardingCompleted));
+  const hasAutoRedirected = useRef(hasCompletedOnboarding);
 
   useEffect(() => {
-    if (userProfile?.onboardingCompleted && !hasAutoRedirected.current) {
+    if (!hasCompletedOnboarding) {
+      hasAutoRedirected.current = false;
+      setActiveTab('onboarding');
+      return;
+    }
+    if (hasCompletedOnboarding && !hasAutoRedirected.current) {
       hasAutoRedirected.current = true;
       setActiveTab('gym');
     }
-  }, [userProfile?.onboardingCompleted]);
+  }, [hasCompletedOnboarding, currentUser?.id]);
 
   const [isQuickCommandOpen, setIsQuickCommandOpen] = useState(false);
   const [isWeightPopoverOpen, setIsWeightPopoverOpen] = useState(false);
@@ -75,7 +79,7 @@ export function App() {
   }, [biometricLogs]);
 
   const [headerWeightInput, setHeaderWeightInput] = useState<number>(
-    latestBio?.scaleWeightKg ?? 80
+    latestBio?.scaleWeightKg ?? 70
   );
   const [weightSavedToast, setWeightSavedToast] = useState(false);
 
@@ -88,6 +92,7 @@ export function App() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        if (!hasCompletedOnboarding) return;
         e.preventDefault();
         setIsQuickCommandOpen((prev) => !prev);
       } else if (e.key === 'Escape') {
@@ -97,7 +102,7 @@ export function App() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [hasCompletedOnboarding]);
 
   const todayStats = useMemo(() => {
     const logsToday = timelineLogs.filter((l) => l.date === selectedDate);
@@ -108,8 +113,8 @@ export function App() {
     const consumedProtein = Math.round(
       logsToday.reduce((sum, item) => sum + item.calculatedMacros.proteinG, 0)
     );
-    const targetKcal = userProfile?.targetKcal ?? 2400;
-    const targetProtein = userProfile?.targetProteinG ?? 175;
+    const targetKcal = userProfile?.targetKcal ?? 0;
+    const targetProtein = userProfile?.targetProteinG ?? 0;
     const remainingProtein = Math.max(0, targetProtein - consumedProtein);
 
     const sessionsToday = workoutSessions.filter(
@@ -148,6 +153,8 @@ export function App() {
     return <AuthScreen />;
   }
 
+  const displayName = userProfile?.name || currentUser.fullName;
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       {/* ====================================================================
@@ -159,7 +166,9 @@ export function App() {
           <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={() => setActiveTab(userProfile ? 'gym' : 'onboarding')}
+              onClick={() =>
+                setActiveTab(hasCompletedOnboarding ? 'gym' : 'onboarding')
+              }
               className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs transition hover:scale-105 hover:border-emerald-300"
               title="FitNutrición"
             >
@@ -184,118 +193,128 @@ export function App() {
                   </button>
                 )}
               </div>
+              {displayName && (
+                <div className="text-xs font-semibold text-slate-500">
+                  Hola, {displayName}
+                </div>
+              )}
             </div>
           </div>
 
           {/* Buscador Rápido + Botón de Peso en 2 clics */}
-          <div className="flex flex-1 items-center justify-end gap-2 sm:justify-center md:max-w-md">
-            <button
-              type="button"
-              onClick={() => setIsQuickCommandOpen(true)}
-              className="flex w-full max-w-xs items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-sm text-slate-500 transition hover:border-emerald-400 hover:bg-white hover:text-slate-800 sm:max-w-sm"
-            >
-              <span className="flex items-center gap-2 truncate">
-                <Search className="h-4 w-4 shrink-0 text-emerald-600" />
-                <span className="truncate">Buscar comida o ejercicio...</span>
-              </span>
-            </button>
+          {hasCompletedOnboarding && (
+            <div className="flex flex-1 items-center justify-end gap-2 sm:justify-center md:max-w-md">
+              <button
+                type="button"
+                onClick={() => setIsQuickCommandOpen(true)}
+                className="flex w-full max-w-xs items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-sm text-slate-500 transition hover:border-emerald-400 hover:bg-white hover:text-slate-800 sm:max-w-sm"
+              >
+                <span className="flex items-center gap-2 truncate">
+                  <Search className="h-4 w-4 shrink-0 text-emerald-600" />
+                  <span className="truncate">Buscar comida o ejercicio...</span>
+                </span>
+              </button>
 
-            {userProfile && (
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setIsWeightPopoverOpen((prev) => !prev)}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 shadow-2xs transition hover:border-emerald-400 hover:text-emerald-700"
-                  title="Anotar mi peso de hoy"
-                >
-                  <Scale className="h-4 w-4 text-emerald-600" />
-                  <span>
-                    {latestBio
-                      ? `${latestBio.scaleWeightKg.toFixed(1)} kg`
-                      : 'Peso'}
-                  </span>
-                </button>
+              {userProfile && (
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setIsWeightPopoverOpen((prev) => !prev)}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 shadow-2xs transition hover:border-emerald-400 hover:text-emerald-700"
+                    title="Anotar mi peso de hoy"
+                  >
+                    <Scale className="h-4 w-4 text-emerald-600" />
+                    <span>
+                      {latestBio
+                        ? `${latestBio.scaleWeightKg.toFixed(1)} kg`
+                        : 'Peso'}
+                    </span>
+                  </button>
 
-                {isWeightPopoverOpen && (
-                  <div className="absolute right-0 mt-2 w-64 rounded-2xl border border-slate-200 bg-white p-4 shadow-xl">
-                    <div className="mb-2 flex items-center justify-between text-xs">
-                      <span className="font-bold text-slate-800">
-                        Tu peso de hoy
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setIsWeightPopoverOpen(false)}
-                        className="text-slate-400 hover:text-slate-600"
-                      >
-                        Cerrar
-                      </button>
-                    </div>
-                    <form
-                      onSubmit={handleQuickSaveWeight}
-                      className="space-y-2.5"
-                    >
-                      <div className="flex items-center gap-1.5">
+                  {isWeightPopoverOpen && (
+                    <div className="absolute right-0 mt-2 w-64 rounded-2xl border border-slate-200 bg-white p-4 shadow-xl">
+                      <div className="mb-2 flex items-center justify-between text-xs">
+                        <span className="font-bold text-slate-800">
+                          Tu peso de hoy
+                        </span>
                         <button
                           type="button"
-                          onClick={() =>
-                            setHeaderWeightInput((w) =>
-                              Number((w - 0.2).toFixed(1))
-                            )
-                          }
-                          className="rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-100"
+                          onClick={() => setIsWeightPopoverOpen(false)}
+                          className="text-slate-400 hover:text-slate-600"
                         >
-                          -0.2
-                        </button>
-                        <input
-                          type="number"
-                          step={0.1}
-                          value={headerWeightInput}
-                          onChange={(e) =>
-                            setHeaderWeightInput(Number(e.target.value))
-                          }
-                          className="w-full rounded-xl border border-slate-200 bg-slate-50 px-2 py-2 text-center text-base font-bold text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none"
-                        />
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setHeaderWeightInput((w) =>
-                              Number((w + 0.2).toFixed(1))
-                            )
-                          }
-                          className="rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-100"
-                        >
-                          +0.2
+                          Cerrar
                         </button>
                       </div>
-                      <button
-                        type="submit"
-                        className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-emerald-600 py-2.5 text-sm font-bold text-white shadow-xs hover:bg-emerald-500"
+                      <form
+                        onSubmit={handleQuickSaveWeight}
+                        className="space-y-2.5"
                       >
-                        {weightSavedToast ? (
-                          <>
-                            <Check className="h-4 w-4" />
-                            <span>¡Guardado!</span>
-                          </>
-                        ) : (
-                          <span>Guardar peso</span>
-                        )}
-                      </button>
-                    </form>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setHeaderWeightInput((w) =>
+                                Number((w - 0.2).toFixed(1))
+                              )
+                            }
+                            className="rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-100"
+                          >
+                            -0.2
+                          </button>
+                          <input
+                            type="number"
+                            step={0.1}
+                            value={headerWeightInput}
+                            onChange={(e) =>
+                              setHeaderWeightInput(Number(e.target.value))
+                            }
+                            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-2 py-2 text-center text-base font-bold text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none"
+                          />
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setHeaderWeightInput((w) =>
+                                Number((w + 0.2).toFixed(1))
+                              )
+                            }
+                            className="rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-100"
+                          >
+                            +0.2
+                          </button>
+                        </div>
+                        <button
+                          type="submit"
+                          className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-emerald-600 py-2.5 text-sm font-bold text-white shadow-xs hover:bg-emerald-500"
+                        >
+                          {weightSavedToast ? (
+                            <>
+                              <Check className="h-4 w-4" />
+                              <span>¡Guardado!</span>
+                            </>
+                          ) : (
+                            <span>Guardar peso</span>
+                          )}
+                        </button>
+                      </form>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* 4 Pestañas Principales Grandes y Legibles */}
           <nav className="hidden items-center gap-1.5 md:flex">
             <button
               type="button"
+              disabled={!hasCompletedOnboarding}
               onClick={() => setActiveTab('gym')}
               className={`inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-bold transition ${
-                activeTab === 'gym'
-                  ? 'bg-indigo-600 text-white shadow-xs'
-                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                !hasCompletedOnboarding
+                  ? 'cursor-not-allowed text-slate-300'
+                  : activeTab === 'gym'
+                    ? 'bg-indigo-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
               }`}
             >
               <Dumbbell className="h-4 w-4" />
@@ -304,11 +323,14 @@ export function App() {
 
             <button
               type="button"
+              disabled={!hasCompletedOnboarding}
               onClick={() => setActiveTab('nutrition')}
               className={`inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-bold transition ${
-                activeTab === 'nutrition'
-                  ? 'bg-emerald-600 text-white shadow-xs'
-                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                !hasCompletedOnboarding
+                  ? 'cursor-not-allowed text-slate-300'
+                  : activeTab === 'nutrition'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
               }`}
             >
               <Utensils className="h-4 w-4" />
@@ -317,10 +339,10 @@ export function App() {
 
             <button
               type="button"
-              disabled={!userProfile}
+              disabled={!hasCompletedOnboarding}
               onClick={() => setActiveTab('biometrics')}
               className={`inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-bold transition ${
-                !userProfile
+                !hasCompletedOnboarding
                   ? 'cursor-not-allowed text-slate-300'
                   : activeTab === 'biometrics'
                     ? 'bg-blue-600 text-white shadow-xs'
@@ -343,21 +365,6 @@ export function App() {
               <SlidersHorizontal className="h-4 w-4" />
               <span>Mi Plan</span>
             </button>
-
-            {userProfile && (
-              <button
-                type="button"
-                onClick={() => {
-                  resetStoreToOnboarding();
-                  hasAutoRedirected.current = false;
-                  setActiveTab('onboarding');
-                }}
-                title="Reiniciar datos de prueba"
-                className="ml-1 rounded-xl border border-slate-200 bg-white p-2 text-slate-400 transition hover:border-slate-300 hover:text-slate-700"
-              >
-                <RotateCcw className="h-4 w-4" />
-              </button>
-            )}
 
             <button
               type="button"
@@ -406,7 +413,9 @@ export function App() {
                     <strong className="text-slate-900">
                       {todayStats.sessionsTodayCount > 0
                         ? `${todayStats.setsToday} series hechas hoy`
-                        : 'Rutina lista para empezar'}
+                        : workoutRoutines.length > 0
+                          ? 'Rutina lista para empezar'
+                          : 'Crea tu primera rutina'}
                     </strong>
                   </span>
                 </button>
@@ -446,9 +455,14 @@ export function App() {
       <nav className="fixed right-0 bottom-0 left-0 z-30 flex items-center justify-around border-t border-slate-200 bg-white/95 px-2 py-2 shadow-lg backdrop-blur-md md:hidden">
         <button
           type="button"
+          disabled={!hasCompletedOnboarding}
           onClick={() => setActiveTab('gym')}
           className={`flex flex-col items-center gap-1 rounded-xl px-3 py-1 text-xs font-bold ${
-            activeTab === 'gym' ? 'text-indigo-600' : 'text-slate-500'
+            !hasCompletedOnboarding
+              ? 'text-slate-300'
+              : activeTab === 'gym'
+                ? 'text-indigo-600'
+                : 'text-slate-500'
           }`}
         >
           <Dumbbell className="h-5 w-5" />
@@ -457,9 +471,14 @@ export function App() {
 
         <button
           type="button"
+          disabled={!hasCompletedOnboarding}
           onClick={() => setActiveTab('nutrition')}
           className={`flex flex-col items-center gap-1 rounded-xl px-3 py-1 text-xs font-bold ${
-            activeTab === 'nutrition' ? 'text-emerald-600' : 'text-slate-500'
+            !hasCompletedOnboarding
+              ? 'text-slate-300'
+              : activeTab === 'nutrition'
+                ? 'text-emerald-600'
+                : 'text-slate-500'
           }`}
         >
           <Utensils className="h-5 w-5" />
@@ -468,8 +487,11 @@ export function App() {
 
         <button
           type="button"
+          disabled={!hasCompletedOnboarding}
           onClick={() => setIsQuickCommandOpen(true)}
-          className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-md"
+          className={`flex h-11 w-11 items-center justify-center rounded-2xl text-white shadow-md ${
+            hasCompletedOnboarding ? 'bg-emerald-600' : 'bg-slate-300'
+          }`}
           title="Añadir rápido"
         >
           <Plus className="h-6 w-6" />
@@ -477,10 +499,10 @@ export function App() {
 
         <button
           type="button"
-          disabled={!userProfile}
+          disabled={!hasCompletedOnboarding}
           onClick={() => setActiveTab('biometrics')}
           className={`flex flex-col items-center gap-1 rounded-xl px-3 py-1 text-xs font-bold ${
-            !userProfile
+            !hasCompletedOnboarding
               ? 'text-slate-300'
               : activeTab === 'biometrics'
                 ? 'text-blue-600'

@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
+  AlertCircle,
   ArrowRight,
   Check,
   Droplets,
@@ -24,6 +25,7 @@ import {
   recommendNutritionalPhase,
 } from '../../lib/metabolism';
 import { useNutritionStore } from '../../store/useNutritionStore';
+import { useAuthStore } from '../../store/useAuthStore';
 
 interface OnboardingDiagnosticProps {
   onCompleted?: () => void;
@@ -79,48 +81,83 @@ export const OnboardingDiagnostic: React.FC<OnboardingDiagnosticProps> = ({
   onCompleted,
   isReconfiguring = false,
 }) => {
+  const currentUser = useAuthStore((s) => s.currentUser);
   const existingProfile = useNutritionStore((s) => s.userProfile);
   const biometricLogs = useNutritionStore((s) => s.biometricLogs);
   const completeOnboarding = useNutritionStore((s) => s.completeOnboarding);
 
   const latestBio = biometricLogs[biometricLogs.length - 1];
 
-  const [name, setName] = useState(existingProfile?.name ?? 'Alejandro');
+  const [name, setName] = useState(
+    existingProfile?.name || currentUser?.fullName || ''
+  );
   const [sex, setSex] = useState<BiologicalSex>(
     existingProfile?.sex ?? 'male'
   );
   const [birthDate, setBirthDate] = useState(
-    existingProfile?.birthDate ?? '1997-06-15'
+    existingProfile?.birthDate ?? ''
   );
-  const [heightCm, setHeightCm] = useState<number>(
-    existingProfile?.heightCm ?? 178
+  const [heightInput, setHeightInput] = useState<string>(
+    existingProfile?.heightCm ? String(existingProfile.heightCm) : ''
   );
-  const [weightKg, setWeightKg] = useState<number>(
-    latestBio?.scaleWeightKg ?? 80.5
+  const [weightInput, setWeightInput] = useState<string>(
+    latestBio?.scaleWeightKg ? String(latestBio.scaleWeightKg) : ''
   );
   const [pal, setPal] = useState<number>(existingProfile?.initialPal ?? 1.55);
   const [trainingExperience, setTrainingExperience] =
     useState<TrainingExperience>(
-      existingProfile?.trainingExperience ?? 'intermediate'
+      existingProfile?.trainingExperience ?? 'novice'
     );
 
-  // Cinta métrica opcional (colapsada por defecto para no abrumar)
+  // Cinta métrica opcional (colapsada por defecto)
   const [useTapeMeasurements, setUseTapeMeasurements] = useState<boolean>(
     latestBio ? latestBio.bfMethod === 'us_navy' : false
   );
-  const [neckCm, setNeckCm] = useState<number>(latestBio?.neckCm ?? 39.0);
-  const [waistCm, setWaistCm] = useState<number>(latestBio?.waistCm ?? 85.0);
-  const [hipCm, setHipCm] = useState<number>(latestBio?.hipCm ?? 97.0);
+  const [neckInput, setNeckInput] = useState<string>(
+    latestBio?.neckCm ? String(latestBio.neckCm) : ''
+  );
+  const [waistInput, setWaistInput] = useState<string>(
+    latestBio?.waistCm ? String(latestBio.waistCm) : ''
+  );
+  const [hipInput, setHipInput] = useState<string>(
+    latestBio?.hipCm ? String(latestBio.hipCm) : ''
+  );
 
   const [userSelectedPhase, setUserSelectedPhase] =
     useState<NutritionalPhase | null>(existingProfile?.currentPhase ?? null);
-  const [seed21DaySimulation, setSeed21DaySimulation] = useState<boolean>(
-    !isReconfiguring
+  const [validationError, setValidationError] = useState<string | null>(null);
+
+  // Sincronizar automáticamente el nombre registrado de la cuenta o del perfil guardado
+  useEffect(() => {
+    if (existingProfile?.name) {
+      setName(existingProfile.name);
+    } else if (currentUser?.fullName) {
+      setName((prev) => (prev.trim() ? prev : currentUser.fullName));
+    }
+  }, [existingProfile?.name, currentUser?.fullName]);
+
+  const heightCm = Number(heightInput);
+  const weightKg = Number(weightInput);
+  const neckCm = neckInput ? Number(neckInput) : undefined;
+  const waistCm = waistInput ? Number(waistInput) : undefined;
+  const hipCm = hipInput ? Number(hipInput) : undefined;
+
+  const isBasicDataComplete =
+    Boolean(birthDate) &&
+    Number.isFinite(heightCm) &&
+    heightCm >= 120 &&
+    heightCm <= 240 &&
+    Number.isFinite(weightKg) &&
+    weightKg >= 30 &&
+    weightKg <= 250;
+
+  const age = useMemo(
+    () => (birthDate ? calculateAgeFromBirthDate(birthDate) : null),
+    [birthDate]
   );
 
-  const age = useMemo(() => calculateAgeFromBirthDate(birthDate), [birthDate]);
-
   const diagnostic = useMemo(() => {
+    if (!isBasicDataComplete || age === null) return null;
     return evaluateAnthropometrics({
       sex,
       age,
@@ -133,6 +170,7 @@ export const OnboardingDiagnostic: React.FC<OnboardingDiagnosticProps> = ({
       hipCm: useTapeMeasurements && sex === 'female' ? hipCm : undefined,
     });
   }, [
+    isBasicDataComplete,
     sex,
     age,
     heightCm,
@@ -146,6 +184,7 @@ export const OnboardingDiagnostic: React.FC<OnboardingDiagnosticProps> = ({
   ]);
 
   const phaseRecommendation = useMemo(() => {
+    if (!isBasicDataComplete || age === null || !diagnostic) return null;
     return recommendNutritionalPhase(
       {
         sex,
@@ -161,6 +200,7 @@ export const OnboardingDiagnostic: React.FC<OnboardingDiagnosticProps> = ({
       diagnostic
     );
   }, [
+    isBasicDataComplete,
     sex,
     age,
     heightCm,
@@ -175,6 +215,7 @@ export const OnboardingDiagnostic: React.FC<OnboardingDiagnosticProps> = ({
   ]);
 
   const activePhase: NutritionalPhase = useMemo(() => {
+    if (!phaseRecommendation) return userSelectedPhase ?? 'recomp';
     if (
       userSelectedPhase &&
       phaseRecommendation.options[userSelectedPhase]?.enabled
@@ -185,14 +226,16 @@ export const OnboardingDiagnostic: React.FC<OnboardingDiagnosticProps> = ({
   }, [userSelectedPhase, phaseRecommendation]);
 
   const phaseCalorieDetails = useMemo(() => {
+    if (!diagnostic) return null;
     return calculateTargetCaloriesForPhase({
       activeTdee: diagnostic.initialStaticTdee,
       phase: activePhase,
       fatMassKg: diagnostic.fatMassKg,
     });
-  }, [diagnostic.initialStaticTdee, diagnostic.fatMassKg, activePhase]);
+  }, [diagnostic, activePhase]);
 
   const hierarchicalMacros = useMemo(() => {
+    if (!diagnostic || !phaseCalorieDetails) return null;
     return calculateHierarchicalMacros({
       targetKcal: phaseCalorieDetails.targetKcal,
       weightKg,
@@ -201,18 +244,40 @@ export const OnboardingDiagnostic: React.FC<OnboardingDiagnosticProps> = ({
       sex,
       phase: activePhase,
     });
-  }, [
-    phaseCalorieDetails.targetKcal,
-    weightKg,
-    diagnostic.lbmKg,
-    diagnostic.bfPercent,
-    sex,
-    activePhase,
-  ]);
+  }, [diagnostic, phaseCalorieDetails, weightKg, sex, activePhase]);
 
   const handleSaveOnboarding = () => {
+    setValidationError(null);
+
+    const finalName = name.trim() || currentUser?.fullName || '';
+    if (!finalName) {
+      setValidationError('Por favor ingresa tu nombre.');
+      return;
+    }
+    if (!birthDate) {
+      setValidationError(
+        'Ingresa tu fecha de nacimiento en el Paso 1 para calcular tu gasto energético real.'
+      );
+      return;
+    }
+    if (!Number.isFinite(heightCm) || heightCm < 120 || heightCm > 240) {
+      setValidationError(
+        'Ingresa tu altura real en centímetros (entre 120 y 240 cm).'
+      );
+      return;
+    }
+    if (!Number.isFinite(weightKg) || weightKg < 30 || weightKg > 250) {
+      setValidationError(
+        'Ingresa tu peso actual real en kilogramos (entre 30 y 250 kg).'
+      );
+      return;
+    }
+    if (!phaseCalorieDetails) {
+      return;
+    }
+
     completeOnboarding({
-      name,
+      name: finalName,
       birthDate,
       sex,
       heightCm,
@@ -225,8 +290,8 @@ export const OnboardingDiagnostic: React.FC<OnboardingDiagnosticProps> = ({
       selectedPhase: activePhase,
       customAdjustmentPercent: phaseCalorieDetails.appliedAdjustmentPercent,
       ewmaAlpha: 0.12,
-      seed21DaySimulation,
     });
+
     if (onCompleted) {
       onCompleted();
     }
@@ -235,16 +300,18 @@ export const OnboardingDiagnostic: React.FC<OnboardingDiagnosticProps> = ({
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
       {/* Cabecera Simple y Directa */}
-      <div className="mb-8 flex flex-col justify-between gap-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-xs sm:flex-row sm:items-center">
+      <div className="mb-6 flex flex-col justify-between gap-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-xs sm:flex-row sm:items-center">
         <div>
           <span className="inline-block rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
-            Configuración en 3 pasos
+            Configuración personalizada
           </span>
           <h1 className="mt-2 text-2xl font-extrabold text-slate-900 sm:text-3xl">
-            Arma tu Plan Personalizado
+            {name.trim()
+              ? `Hola, ${name.trim()} · Arma tu Plan`
+              : 'Arma tu Plan Personalizado'}
           </h1>
           <p className="mt-1 text-sm text-slate-600">
-            Completa tus datos básicos para calcular tus calorías y proteínas ideales.
+            Ingresa tus medidas reales para calcular desde cero tus calorías, proteínas y progreso.
           </p>
         </div>
 
@@ -259,6 +326,13 @@ export const OnboardingDiagnostic: React.FC<OnboardingDiagnosticProps> = ({
           <ArrowRight className="h-4 w-4" />
         </button>
       </div>
+
+      {validationError && (
+        <div className="mb-6 flex items-center gap-2.5 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3.5 text-sm font-semibold text-rose-800">
+          <AlertCircle className="h-5 w-5 shrink-0 text-rose-600" />
+          <span>{validationError}</span>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
         {/* ===================================================================
@@ -276,7 +350,9 @@ export const OnboardingDiagnostic: React.FC<OnboardingDiagnosticProps> = ({
                   1. Tus datos básicos
                 </h2>
                 <p className="text-xs text-slate-500">
-                  Para conocer tu punto de partida ({age} años)
+                  {age !== null
+                    ? `Punto de partida (${age} años)`
+                    : 'Completa tus datos reales para iniciar tu cuenta desde cero'}
                 </p>
               </div>
             </div>
@@ -292,7 +368,7 @@ export const OnboardingDiagnostic: React.FC<OnboardingDiagnosticProps> = ({
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm font-medium text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none"
-                    placeholder="Ej. Alejandro"
+                    placeholder="Tu nombre"
                   />
                 </div>
                 <div>
@@ -302,7 +378,10 @@ export const OnboardingDiagnostic: React.FC<OnboardingDiagnosticProps> = ({
                   <input
                     type="date"
                     value={birthDate}
-                    onChange={(e) => setBirthDate(e.target.value)}
+                    onChange={(e) => {
+                      setBirthDate(e.target.value);
+                      setValidationError(null);
+                    }}
                     className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm font-medium text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none"
                   />
                 </div>
@@ -310,7 +389,7 @@ export const OnboardingDiagnostic: React.FC<OnboardingDiagnosticProps> = ({
 
               <div>
                 <label className="mb-1.5 block text-sm font-semibold text-slate-700">
-                  Sexo
+                  Sexo biológico
                 </label>
                 <div className="grid grid-cols-2 gap-3">
                   <button
@@ -345,12 +424,16 @@ export const OnboardingDiagnostic: React.FC<OnboardingDiagnosticProps> = ({
                   </label>
                   <input
                     type="number"
-                    min={130}
-                    max={230}
+                    min={120}
+                    max={240}
                     step={0.5}
-                    value={heightCm}
-                    onChange={(e) => setHeightCm(Number(e.target.value) || 170)}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-base font-bold text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none"
+                    value={heightInput}
+                    onChange={(e) => {
+                      setHeightInput(e.target.value);
+                      setValidationError(null);
+                    }}
+                    placeholder="Ej. 175"
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-base font-bold text-slate-900 placeholder-slate-400 focus:border-emerald-500 focus:bg-white focus:outline-none"
                   />
                 </div>
                 <div>
@@ -359,12 +442,16 @@ export const OnboardingDiagnostic: React.FC<OnboardingDiagnosticProps> = ({
                   </label>
                   <input
                     type="number"
-                    min={35}
-                    max={220}
+                    min={30}
+                    max={250}
                     step={0.1}
-                    value={weightKg}
-                    onChange={(e) => setWeightKg(Number(e.target.value) || 70)}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-base font-bold text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none"
+                    value={weightInput}
+                    onChange={(e) => {
+                      setWeightInput(e.target.value);
+                      setValidationError(null);
+                    }}
+                    placeholder="Ej. 75"
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-base font-bold text-slate-900 placeholder-slate-400 focus:border-emerald-500 focus:bg-white focus:outline-none"
                   />
                 </div>
               </div>
@@ -402,11 +489,10 @@ export const OnboardingDiagnostic: React.FC<OnboardingDiagnosticProps> = ({
                       <input
                         type="number"
                         step={0.5}
-                        value={neckCm}
-                        onChange={(e) =>
-                          setNeckCm(Number(e.target.value) || 35)
-                        }
-                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-900"
+                        value={neckInput}
+                        onChange={(e) => setNeckInput(e.target.value)}
+                        placeholder="Ej. 38"
+                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-900 placeholder-slate-400"
                       />
                     </div>
                     <div>
@@ -416,11 +502,10 @@ export const OnboardingDiagnostic: React.FC<OnboardingDiagnosticProps> = ({
                       <input
                         type="number"
                         step={0.5}
-                        value={waistCm}
-                        onChange={(e) =>
-                          setWaistCm(Number(e.target.value) || 80)
-                        }
-                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-900"
+                        value={waistInput}
+                        onChange={(e) => setWaistInput(e.target.value)}
+                        placeholder="Ej. 82"
+                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-900 placeholder-slate-400"
                       />
                     </div>
                     {sex === 'female' && (
@@ -431,11 +516,10 @@ export const OnboardingDiagnostic: React.FC<OnboardingDiagnosticProps> = ({
                         <input
                           type="number"
                           step={0.5}
-                          value={hipCm}
-                          onChange={(e) =>
-                            setHipCm(Number(e.target.value) || 95)
-                          }
-                          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-900"
+                          value={hipInput}
+                          onChange={(e) => setHipInput(e.target.value)}
+                          placeholder="Ej. 96"
+                          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-900 placeholder-slate-400"
                         />
                       </div>
                     )}
@@ -456,7 +540,7 @@ export const OnboardingDiagnostic: React.FC<OnboardingDiagnosticProps> = ({
                   2. ¿Cuánto entrenas por semana?
                 </h2>
                 <p className="text-xs text-slate-500">
-                  Elige la opción que mejor describa tu rutina actual
+                  Elige la opción que mejor describa tu actividad actual
                 </p>
               </div>
             </div>
@@ -493,7 +577,7 @@ export const OnboardingDiagnostic: React.FC<OnboardingDiagnosticProps> = ({
 
             <div className="mt-4 border-t border-slate-100 pt-4">
               <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-500">
-                Tiempo entrenando en gimnasio
+                Experiencia entrenando fuerza
               </label>
               <div className="grid grid-cols-3 gap-2">
                 {(
@@ -525,176 +609,196 @@ export const OnboardingDiagnostic: React.FC<OnboardingDiagnosticProps> = ({
             COLUMNA DERECHA (6 cols): PASO 3 (TU OBJETIVO Y TUS METAS DIARIAS)
            =================================================================== */}
         <div className="space-y-6 lg:col-span-6">
-          {/* PASO 3: Elige tu Objetivo */}
-          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-xs">
-            <div className="mb-4 flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
-                <Target className="h-5 w-5" />
+          {!isBasicDataComplete ||
+          !diagnostic ||
+          !phaseRecommendation ||
+          !hierarchicalMacros ? (
+            <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-8 text-center shadow-xs">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
+                <Target className="h-6 w-6" />
               </div>
-              <div>
-                <h2 className="text-lg font-bold text-slate-900">
-                  3. ¿Cuál es tu objetivo?
-                </h2>
-                <p className="text-xs text-slate-500">
-                  Grasa corporal estimada:{' '}
-                  <strong className="text-slate-800">
-                    {diagnostic.bfPercent.toFixed(1)}%
-                  </strong>{' '}
-                  · Masa muscular:{' '}
-                  <strong className="text-slate-800">
-                    {diagnostic.lbmKg.toFixed(1)} kg
-                  </strong>
-                </p>
-              </div>
+              <h2 className="mt-4 text-lg font-extrabold text-slate-900">
+                3. Cálculo en Tiempo Real de tu Plan
+              </h2>
+              <p className="mx-auto mt-2 max-w-md text-sm text-slate-600">
+                Completa tu <strong>fecha de nacimiento</strong>,{' '}
+                <strong>altura (cm)</strong> y <strong>peso actual (kg)</strong>{' '}
+                en el Paso 1 para calcular tus calorías, proteínas y objetivos reales sin datos de prueba.
+              </p>
             </div>
+          ) : (
+            <>
+              {/* PASO 3: Elige tu Objetivo */}
+              <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-xs">
+                <div className="mb-4 flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
+                    <Target className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-bold text-slate-900">
+                      3. ¿Cuál es tu objetivo?
+                    </h2>
+                    <p className="text-xs text-slate-500">
+                      Grasa corporal estimada:{' '}
+                      <strong className="text-slate-800">
+                        {diagnostic.bfPercent.toFixed(1)}%
+                      </strong>{' '}
+                      · Masa libre de grasa:{' '}
+                      <strong className="text-slate-800">
+                        {diagnostic.lbmKg.toFixed(1)} kg
+                      </strong>
+                    </p>
+                  </div>
+                </div>
 
-            {/* Recomendación en lenguaje simple */}
-            <div className="mb-4 flex items-start gap-2.5 rounded-2xl bg-emerald-50/80 p-3.5 text-xs text-emerald-900 ring-1 ring-emerald-200">
-              <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
-              <div>
-                <span className="font-bold">Nuestra sugerencia para ti: </span>
-                <span>
-                  {SIMPLE_PHASE_INFO[phaseRecommendation.recommendedPhase].title}
-                  . {SIMPLE_PHASE_INFO[phaseRecommendation.recommendedPhase].desc}
-                </span>
-              </div>
-            </div>
+                {/* Recomendación en lenguaje simple */}
+                <div className="mb-4 flex items-start gap-2.5 rounded-2xl bg-emerald-50/80 p-3.5 text-xs text-emerald-900 ring-1 ring-emerald-200">
+                  <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                  <div>
+                    <span className="font-bold">
+                      Nuestra sugerencia según tus datos:{' '}
+                    </span>
+                    <span>
+                      {
+                        SIMPLE_PHASE_INFO[phaseRecommendation.recommendedPhase]
+                          .title
+                      }
+                      .{' '}
+                      {
+                        SIMPLE_PHASE_INFO[phaseRecommendation.recommendedPhase]
+                          .desc
+                      }
+                    </span>
+                  </div>
+                </div>
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {(['cut', 'recomp', 'maintenance', 'bulk'] as const).map(
-                (phaseKey) => {
-                  const opt = phaseRecommendation.options[phaseKey];
-                  const info = SIMPLE_PHASE_INFO[phaseKey];
-                  const isSelected = activePhase === phaseKey;
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {(['cut', 'recomp', 'maintenance', 'bulk'] as const).map(
+                    (phaseKey) => {
+                      const opt = phaseRecommendation.options[phaseKey];
+                      const info = SIMPLE_PHASE_INFO[phaseKey];
+                      const isSelected = activePhase === phaseKey;
 
-                  return (
-                    <button
-                      key={phaseKey}
-                      type="button"
-                      disabled={!opt.enabled}
-                      onClick={() => setUserSelectedPhase(phaseKey)}
-                      className={`flex flex-col justify-between rounded-2xl border p-4 text-left transition ${
-                        !opt.enabled
-                          ? 'cursor-not-allowed border-slate-100 bg-slate-50 opacity-50'
-                          : isSelected
-                            ? 'border-emerald-600 bg-emerald-50/60 ring-2 ring-emerald-600/20'
-                            : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
-                      }`}
-                    >
-                      <div>
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-base font-extrabold text-slate-900">
-                            {info.title}
-                          </span>
-                          {opt.recommended ? (
-                            <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-bold text-white">
-                              Ideal
+                      return (
+                        <button
+                          key={phaseKey}
+                          type="button"
+                          disabled={!opt.enabled}
+                          onClick={() => setUserSelectedPhase(phaseKey)}
+                          className={`flex flex-col justify-between rounded-2xl border p-4 text-left transition ${
+                            !opt.enabled
+                              ? 'cursor-not-allowed border-slate-100 bg-slate-50 opacity-50'
+                              : isSelected
+                                ? 'border-emerald-600 bg-emerald-50/60 ring-2 ring-emerald-600/20'
+                                : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+                          }`}
+                        >
+                          <div>
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-base font-extrabold text-slate-900">
+                                {info.title}
+                              </span>
+                              {opt.recommended ? (
+                                <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-bold text-white">
+                                  Ideal
+                                </span>
+                              ) : !opt.enabled ? (
+                                <Lock className="h-3.5 w-3.5 text-slate-400" />
+                              ) : null}
+                            </div>
+                            <p className="mt-1 text-xs text-slate-600">
+                              {info.desc}
+                            </p>
+                          </div>
+
+                          <div className="mt-3 border-t border-slate-100 pt-2.5">
+                            <span className="text-lg font-extrabold text-slate-900">
+                              {opt.targetKcal} kcal
                             </span>
-                          ) : !opt.enabled ? (
-                            <Lock className="h-3.5 w-3.5 text-slate-400" />
-                          ) : null}
-                        </div>
-                        <p className="mt-1 text-xs text-slate-600">
-                          {info.desc}
-                        </p>
-                      </div>
-
-                      <div className="mt-3 border-t border-slate-100 pt-2.5">
-                        <span className="text-lg font-extrabold text-slate-900">
-                          {opt.targetKcal} kcal
-                        </span>
-                        <span className="ml-1 text-xs text-slate-500">
-                          / día
-                        </span>
-                      </div>
-                    </button>
-                  );
-                }
-              )}
-            </div>
-          </div>
-
-          {/* Resumen Final de tu Plan Diario */}
-          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-xs">
-            <div className="mb-4 flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <Flame className="h-5 w-5 text-emerald-600" />
-                <h2 className="text-lg font-bold text-slate-900">
-                  Tu Meta Diaria Lista
-                </h2>
-              </div>
-              <span className="text-xl font-extrabold text-emerald-700">
-                {hierarchicalMacros.kcal} kcal / día
-              </span>
-            </div>
-
-            <div className="grid grid-cols-3 gap-3">
-              <div className="rounded-2xl bg-blue-50 p-4 text-center">
-                <span className="text-xs font-bold text-blue-700">
-                  Proteínas
-                </span>
-                <div className="mt-1 text-2xl font-extrabold text-slate-900">
-                  {hierarchicalMacros.proteinG}g
+                            <span className="ml-1 text-xs text-slate-500">
+                              / día
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    }
+                  )}
                 </div>
-                <span className="text-[11px] text-slate-500">Músculo</span>
               </div>
 
-              <div className="rounded-2xl bg-emerald-50 p-4 text-center">
-                <span className="text-xs font-bold text-emerald-700">
-                  Carbohidratos
-                </span>
-                <div className="mt-1 text-2xl font-extrabold text-slate-900">
-                  {hierarchicalMacros.carbsG}g
+              {/* Resumen Final de tu Plan Diario */}
+              <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-xs">
+                <div className="mb-4 flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <Flame className="h-5 w-5 text-emerald-600" />
+                    <h2 className="text-lg font-bold text-slate-900">
+                      Tu Meta Diaria Calculada
+                    </h2>
+                  </div>
+                  <span className="text-xl font-extrabold text-emerald-700">
+                    {hierarchicalMacros.kcal} kcal / día
+                  </span>
                 </div>
-                <span className="text-[11px] text-slate-500">Energía</span>
-              </div>
 
-              <div className="rounded-2xl bg-amber-50 p-4 text-center">
-                <span className="text-xs font-bold text-amber-800">Grasas</span>
-                <div className="mt-1 text-2xl font-extrabold text-slate-900">
-                  {hierarchicalMacros.fatG}g
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="rounded-2xl bg-blue-50 p-4 text-center">
+                    <span className="text-xs font-bold text-blue-700">
+                      Proteínas
+                    </span>
+                    <div className="mt-1 text-2xl font-extrabold text-slate-900">
+                      {hierarchicalMacros.proteinG}g
+                    </div>
+                    <span className="text-[11px] text-slate-500">Músculo</span>
+                  </div>
+
+                  <div className="rounded-2xl bg-emerald-50 p-4 text-center">
+                    <span className="text-xs font-bold text-emerald-700">
+                      Carbohidratos
+                    </span>
+                    <div className="mt-1 text-2xl font-extrabold text-slate-900">
+                      {hierarchicalMacros.carbsG}g
+                    </div>
+                    <span className="text-[11px] text-slate-500">Energía</span>
+                  </div>
+
+                  <div className="rounded-2xl bg-amber-50 p-4 text-center">
+                    <span className="text-xs font-bold text-amber-800">
+                      Grasas
+                    </span>
+                    <div className="mt-1 text-2xl font-extrabold text-slate-900">
+                      {hierarchicalMacros.fatG}g
+                    </div>
+                    <span className="text-[11px] text-slate-500">Salud</span>
+                  </div>
                 </div>
-                <span className="text-[11px] text-slate-500">Salud</span>
+
+                <div className="mt-4 flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                  <span className="flex items-center gap-2 font-semibold">
+                    <Droplets className="h-4 w-4 text-blue-600" />
+                    <span>Agua recomendada por día:</span>
+                  </span>
+                  <strong className="text-slate-900">
+                    {(hierarchicalMacros.waterMl / 1000).toFixed(1)} Litros
+                  </strong>
+                </div>
+
+                <div className="mt-5 border-t border-slate-100 pt-4">
+                  <button
+                    type="button"
+                    onClick={handleSaveOnboarding}
+                    className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 py-3.5 text-base font-bold text-white shadow-sm transition hover:bg-emerald-500"
+                  >
+                    <span>
+                      {isReconfiguring
+                        ? 'Guardar mi Plan'
+                        : 'Guardar mi Plan y Empezar'}
+                    </span>
+                    <ArrowRight className="h-5 w-5" />
+                  </button>
+                </div>
               </div>
-            </div>
-
-            <div className="mt-4 flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-700">
-              <span className="flex items-center gap-2 font-semibold">
-                <Droplets className="h-4 w-4 text-blue-600" />
-                <span>Agua recomendada por día:</span>
-              </span>
-              <strong className="text-slate-900">
-                {(hierarchicalMacros.waterMl / 1000).toFixed(1)} Litros
-              </strong>
-            </div>
-
-            <div className="mt-5 flex flex-col gap-3 border-t border-slate-100 pt-4">
-              <label className="flex cursor-pointer items-center gap-2.5 text-xs text-slate-600">
-                <input
-                  type="checkbox"
-                  checked={seed21DaySimulation}
-                  onChange={(e) => setSeed21DaySimulation(e.target.checked)}
-                  className="h-4 w-4 rounded border-slate-300 text-emerald-600"
-                />
-                <span>
-                  Cargar 21 días de ejemplo para ver gráficas de progreso desde hoy
-                </span>
-              </label>
-
-              <button
-                type="button"
-                onClick={handleSaveOnboarding}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 py-3.5 text-base font-bold text-white shadow-sm transition hover:bg-emerald-500"
-              >
-                <span>
-                  {isReconfiguring
-                    ? 'Guardar mi Plan'
-                    : 'Guardar mi Plan y Empezar'}
-                </span>
-                <ArrowRight className="h-5 w-5" />
-              </button>
-            </div>
-          </div>
+            </>
+          )}
         </div>
       </div>
     </div>

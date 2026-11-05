@@ -176,29 +176,18 @@ export function getDoubleProgressionSuggestion(params: {
   );
 
   if (!lastSessionWithExercise) {
-    const defaultWeight =
-      catalogItem?.equipment === 'Barra'
-        ? 60
-        : catalogItem?.equipment === 'Mancuerna'
-          ? 16
-          : catalogItem?.equipment === 'Polea'
-            ? 35
-            : catalogItem?.equipment === 'Máquina'
-              ? 70
-              : 0;
-
     return {
       exerciseId,
       hasHistory: false,
       allWorkingSetsHitTopOfRange: false,
       loadIncrementKg: incrementKg,
-      summaryBanner: `Primera sesión registrada: inicia con carga conservadora a RIR ${routineExercise.targetRir} dentro del rango ${minReps}-${maxReps} reps.`,
+      summaryBanner: `Primera vez en este ejercicio: anota el peso que utilices hoy para hacer entre ${minReps} y ${maxReps} repeticiones.`,
       setSuggestions: Array.from({ length: targetSets }, (_, idx) => ({
         setNumber: idx + 1,
-        previousText: '—',
-        previousWeightKg: defaultWeight,
+        previousText: 'Sin registro previo',
+        previousWeightKg: 0,
         previousReps: minReps,
-        suggestedWeightKg: defaultWeight,
+        suggestedWeightKg: 0,
         suggestedReps: minReps,
         progressionTriggered: false,
         suggestionNote: `Meta inicial: ${minReps}-${maxReps} reps`,

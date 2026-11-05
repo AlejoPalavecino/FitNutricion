@@ -1,11 +1,10 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   CheckCircle2,
   Edit3,
   Plus,
   RefreshCw,
   Scale,
-  Sparkles,
 } from 'lucide-react';
 import {
   CartesianGrid,
@@ -43,9 +42,6 @@ export const BiometricCheckinView: React.FC<BiometricCheckinViewProps> = ({
   const executeWeeklyMetabolicCheckin = useNutritionStore(
     (s) => s.executeWeeklyMetabolicCheckin
   );
-  const load21DaySimulation = useNutritionStore(
-    (s) => s.load21DaySimulationForCurrentProfile
-  );
 
   const sortedLogs = useMemo(
     () => [...biometricLogs].sort((a, b) => a.date.localeCompare(b.date)),
@@ -57,9 +53,15 @@ export const BiometricCheckinView: React.FC<BiometricCheckinViewProps> = ({
     new Date().toISOString().slice(0, 10)
   );
   const [scaleWeight, setScaleWeight] = useState<number>(
-    latestLog?.scaleWeightKg ?? 80
+    latestLog?.scaleWeightKg ?? 70
   );
   const [checkinBanner, setCheckinBanner] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (latestLog?.scaleWeightKg) {
+      setScaleWeight(latestLog.scaleWeightKg);
+    }
+  }, [latestLog?.scaleWeightKg]);
 
   const adaptiveStatus = useMemo(
     () => computeCurrentAdaptiveTdeeStatus(),
@@ -70,6 +72,9 @@ export const BiometricCheckinView: React.FC<BiometricCheckinViewProps> = ({
 
   const handlePeriodicControlSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!Number.isFinite(scaleWeight) || scaleWeight < 30 || scaleWeight > 250) {
+      return;
+    }
     addOrUpdateBiometricLog({
       date: logDate,
       scaleWeightKg: scaleWeight,
@@ -98,21 +103,11 @@ export const BiometricCheckinView: React.FC<BiometricCheckinViewProps> = ({
             Evolución de tu Peso · {userProfile.name}
           </h1>
           <p className="mt-1 text-sm text-slate-600">
-            Calculamos tu promedio real para que las subidas de agua no te confundan.
+            Calculamos tu promedio real a partir de tus propios pesajes para filtrar las variaciones diarias de agua.
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
-          {sortedLogs.length < 14 && (
-            <button
-              type="button"
-              onClick={load21DaySimulation}
-              className="inline-flex items-center gap-2 rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-xs font-bold text-indigo-700 hover:bg-indigo-100"
-            >
-              <Sparkles className="h-4 w-4" />
-              <span>Ver ejemplo de 21 días</span>
-            </button>
-          )}
           <button
             type="button"
             onClick={onOpenReconfigure}
@@ -216,7 +211,7 @@ export const BiometricCheckinView: React.FC<BiometricCheckinViewProps> = ({
 
               <div>
                 <label className="mb-1.5 block text-sm font-semibold text-slate-700">
-                  Peso de hoy (kg)
+                  Peso (kg)
                 </label>
                 <div className="flex items-center gap-2">
                   <button
@@ -231,8 +226,8 @@ export const BiometricCheckinView: React.FC<BiometricCheckinViewProps> = ({
                   <input
                     type="number"
                     step={0.1}
-                    min={35}
-                    max={220}
+                    min={30}
+                    max={250}
                     value={scaleWeight}
                     onChange={(e) => setScaleWeight(Number(e.target.value))}
                     className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-center text-lg font-extrabold text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none"
@@ -274,14 +269,14 @@ export const BiometricCheckinView: React.FC<BiometricCheckinViewProps> = ({
                   >
                     {adaptiveStatus.isReadyForAdaptive
                       ? 'Listo'
-                      : 'Reuniendo datos'}
+                      : `${adaptiveStatus.loggedDaysCount} días registrados`}
                   </span>
                 </div>
 
                 {adaptiveStatus.isReadyForAdaptive ? (
                   <div className="mt-3 space-y-2 text-xs text-slate-600">
                     <p>
-                      Según tu progreso de las últimas 3 semanas ({adaptiveStatus.weightSlopeKgPerWeek >= 0 ? '+' : ''}
+                      Según tu progreso real ({adaptiveStatus.weightSlopeKgPerWeek >= 0 ? '+' : ''}
                       {adaptiveStatus.weightSlopeKgPerWeek} kg/semana), tu cuerpo quema{' '}
                       <strong className="text-slate-900">
                         {adaptiveStatus.appliedTdee} kcal
@@ -299,7 +294,7 @@ export const BiometricCheckinView: React.FC<BiometricCheckinViewProps> = ({
                   </div>
                 ) : (
                   <p className="mt-1.5 text-xs text-slate-500">
-                    Registra tu peso y comidas durante 2 semanas para que ajustemos tus calorías automáticamente.
+                    Registra tu peso y comidas durante al menos 2 semanas para que el motor calcule y ajuste tus calorías reales automáticamente.
                   </p>
                 )}
               </div>
@@ -307,65 +302,81 @@ export const BiometricCheckinView: React.FC<BiometricCheckinViewProps> = ({
           </div>
         </div>
 
-        {/* Gráfica Clara */}
-        <div className="lg:col-span-7">
+        {/* Gráfica Clara e Historial Real */}
+        <div className="space-y-6 lg:col-span-7">
           <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-xs">
             <div className="mb-4 flex items-center justify-between">
               <div>
                 <h2 className="text-lg font-bold text-slate-900">
-                  Gráfica de tu Progreso
+                  Gráfica de tu Progreso Real
                 </h2>
                 <p className="text-xs text-slate-500">
                   La línea verde muestra tu tendencia real; la gris es el peso de la báscula cada día
                 </p>
               </div>
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">
+                {sortedLogs.length}{' '}
+                {sortedLogs.length === 1 ? 'registro' : 'registros'}
+              </span>
             </div>
 
-            <div className="h-72 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={sortedLogs}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis
-                    dataKey="date"
-                    tickFormatter={(val: string) => val.slice(5)}
-                    stroke="#64748b"
-                    fontSize={12}
-                  />
-                  <YAxis
-                    domain={['dataMin - 0.6', 'dataMax + 0.6']}
-                    stroke="#64748b"
-                    fontSize={12}
-                    tickFormatter={(v: number) => `${v.toFixed(1)}kg`}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#ffffff',
-                      borderColor: '#e2e8f0',
-                      borderRadius: '14px',
-                      fontSize: '13px',
-                      color: '#0f172a',
-                    }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="scaleWeightKg"
-                    name="Peso en Báscula"
-                    stroke="#94a3b8"
-                    strokeDasharray="4 4"
-                    strokeWidth={2}
-                    dot={{ r: 3, fill: '#94a3b8' }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="trendWeightKg"
-                    name="Peso Real (Promedio)"
-                    stroke="#059669"
-                    strokeWidth={3.5}
-                    dot={{ r: 3.5, fill: '#059669' }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
+            {sortedLogs.length === 0 ? (
+              <div className="flex h-64 flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center">
+                <Scale className="h-8 w-8 text-slate-400" />
+                <p className="mt-2 text-sm font-bold text-slate-700">
+                  Aún no hay pesajes registrados
+                </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Usa el formulario de la izquierda para guardar tu primer peso.
+                </p>
+              </div>
+            ) : (
+              <div className="h-72 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={sortedLogs}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                    <XAxis
+                      dataKey="date"
+                      tickFormatter={(val: string) => val.slice(5)}
+                      stroke="#64748b"
+                      fontSize={12}
+                    />
+                    <YAxis
+                      domain={['dataMin - 0.6', 'dataMax + 0.6']}
+                      stroke="#64748b"
+                      fontSize={12}
+                      tickFormatter={(v: number) => `${v.toFixed(1)}kg`}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: '#ffffff',
+                        borderColor: '#e2e8f0',
+                        borderRadius: '14px',
+                        fontSize: '13px',
+                        color: '#0f172a',
+                      }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="scaleWeightKg"
+                      name="Peso en Báscula"
+                      stroke="#94a3b8"
+                      strokeDasharray="4 4"
+                      strokeWidth={2}
+                      dot={{ r: 3, fill: '#94a3b8' }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="trendWeightKg"
+                      name="Peso Real (Promedio)"
+                      stroke="#059669"
+                      strokeWidth={3.5}
+                      dot={{ r: 3.5, fill: '#059669' }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -78,6 +78,15 @@ const DAYS_SHORT = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 
 const SET_TYPE_Order: WorkoutSetType[] = ['working', 'warmup'];
 
+function createEmptyRoutineDraft(): WorkoutRoutine {
+  return {
+    id: `routine-custom-${Date.now()}`,
+    name: '',
+    assignedDays: [],
+    exercises: [],
+  };
+}
+
 /**
  * Emite un sonido suave al terminar el descanso.
  */
@@ -116,7 +125,9 @@ export const OpenGymHub: React.FC = () => {
   const selectedDate = useNutritionStore((s) => s.selectedDate);
   const saveWorkoutRoutine = useNutritionStore((s) => s.saveWorkoutRoutine);
   const addExerciseToRoutine = useNutritionStore((s) => s.addExerciseToRoutine);
+  const deleteWorkoutRoutine = useNutritionStore((s) => s.deleteWorkoutRoutine);
   const logWorkoutSession = useNutritionStore((s) => s.logWorkoutSession);
+  const deleteWorkoutSession = useNutritionStore((s) => s.deleteWorkoutSession);
 
   const [subTab, setSubTab] = useState<
     'active_workout' | 'catalog' | 'routines' | 'analytics'
@@ -131,25 +142,43 @@ export const OpenGymHub: React.FC = () => {
   // ESTADO 1: ENTRENAR HOY
   // ==========================================================================
   const [selectedRoutineId, setSelectedRoutineId] = useState<string>(
-    workoutRoutines[0]?.id ?? 'routine-push-heavy'
+    workoutRoutines[0]?.id ?? ''
   );
+
+  useEffect(() => {
+    if (
+      workoutRoutines.length > 0 &&
+      !workoutRoutines.some((r) => r.id === selectedRoutineId)
+    ) {
+      setSelectedRoutineId(workoutRoutines[0].id);
+    } else if (workoutRoutines.length === 0 && selectedRoutineId !== '') {
+      setSelectedRoutineId('');
+    }
+  }, [workoutRoutines, selectedRoutineId]);
+
   const activeRoutine = useMemo(
     () =>
-      workoutRoutines.find((r) => r.id === selectedRoutineId) ?? workoutRoutines[0],
+      workoutRoutines.find((r) => r.id === selectedRoutineId) ??
+      workoutRoutines[0],
     [workoutRoutines, selectedRoutineId]
   );
 
   const [activeSetsByExercise, setActiveSetsByExercise] = useState<
     Record<string, WorkoutSetLog[]>
   >({});
-  const [sessionSavedBanner, setSessionSavedBanner] = useState<string | null>(null);
+  const [sessionSavedBanner, setSessionSavedBanner] = useState<string | null>(
+    null
+  );
   const [sessionStartedAt] = useState<Date>(() => new Date());
   const [quickAddExerciseId, setQuickAddExerciseId] = useState<string>(
     exerciseCatalog[0]?.id ?? 'og-0025'
   );
 
   useEffect(() => {
-    if (!activeRoutine) return;
+    if (!activeRoutine) {
+      setActiveSetsByExercise({});
+      return;
+    }
     setActiveSetsByExercise((prev) => {
       const nextMap: Record<string, WorkoutSetLog[]> = {};
 
@@ -186,12 +215,18 @@ export const OpenGymHub: React.FC = () => {
 
       return nextMap;
     });
-  }, [activeRoutine?.id, activeRoutine?.exercises.length, catalogMap, workoutSessions]);
+  }, [
+    activeRoutine?.id,
+    activeRoutine?.exercises.length,
+    catalogMap,
+    workoutSessions,
+  ]);
 
   // Temporizador de descanso
   const [restTimerRemaining, setRestTimerRemaining] = useState<number>(0);
   const [restTimerTotal, setRestTimerTotal] = useState<number>(120);
-  const [restTimerExerciseName, setRestTimerExerciseName] = useState<string>('');
+  const [restTimerExerciseName, setRestTimerExerciseName] =
+    useState<string>('');
   const [isRestTimerActive, setIsRestTimerActive] = useState<boolean>(false);
 
   useEffect(() => {
@@ -251,16 +286,28 @@ export const OpenGymHub: React.FC = () => {
         ...prev,
         [exerciseId]: list.map((s) => {
           if (s.id !== setId) return s;
-          const updated = { ...s, [field]: value };
+          const updated = { ...s, [field]: Math.max(0, value) };
           updated.estimated1RM = calculateEstimated1RM(
             updated.weightKg,
             updated.reps,
             updated.setType
           );
-          const bestHist = getHistoricalExerciseBest(exerciseId, workoutSessions);
-          const isEffective = updated.isCompleted && updated.setType !== 'warmup';
-          updated.isPrWeight = isEffective && updated.weightKg > bestHist.maxWeightKg;
-          updated.isPr1RM = isEffective && updated.estimated1RM > bestHist.max1RMKg;
+          const bestHist = getHistoricalExerciseBest(
+            exerciseId,
+            workoutSessions
+          );
+          const isEffective =
+            updated.isCompleted &&
+            updated.setType !== 'warmup' &&
+            updated.weightKg > 0;
+          updated.isPrWeight =
+            isEffective &&
+            bestHist.maxWeightKg > 0 &&
+            updated.weightKg > bestHist.maxWeightKg;
+          updated.isPr1RM =
+            isEffective &&
+            bestHist.max1RMKg > 0 &&
+            updated.estimated1RM > bestHist.max1RMKg;
           return updated;
         }),
       };
@@ -281,10 +328,20 @@ export const OpenGymHub: React.FC = () => {
           if (s.id !== setId) return s;
           const nextCompleted = !s.isCompleted;
           const est1RM = calculateEstimated1RM(s.weightKg, s.reps, s.setType);
-          const bestHist = getHistoricalExerciseBest(exerciseId, workoutSessions);
-          const isEffective = nextCompleted && s.setType !== 'warmup';
-          const isPrWeight = isEffective && s.weightKg > bestHist.maxWeightKg;
-          const isPr1RM = isEffective && est1RM > bestHist.max1RMKg;
+          const bestHist = getHistoricalExerciseBest(
+            exerciseId,
+            workoutSessions
+          );
+          const isEffective =
+            nextCompleted && s.setType !== 'warmup' && s.weightKg > 0;
+          const isPrWeight =
+            isEffective &&
+            bestHist.maxWeightKg > 0 &&
+            s.weightKg > bestHist.maxWeightKg;
+          const isPr1RM =
+            isEffective &&
+            bestHist.max1RMKg > 0 &&
+            est1RM > bestHist.max1RMKg;
 
           if (nextCompleted) {
             startRestTimer(restSeconds, exNameEs);
@@ -307,7 +364,7 @@ export const OpenGymHub: React.FC = () => {
       const list = prev[exerciseId] ?? [];
       const last = list[list.length - 1];
       const newSetNumber = list.length + 1;
-      const weightKg = last?.weightKg ?? 60;
+      const weightKg = last?.weightKg ?? 0;
       const reps = last?.reps ?? 10;
       const newSet: WorkoutSetLog = {
         id: `live-${exerciseId}-${Date.now()}`,
@@ -369,6 +426,9 @@ export const OpenGymHub: React.FC = () => {
       sets: completed,
     });
 
+    // Reiniciar el estado de completado de la vista en vivo tras guardar
+    setActiveSetsByExercise({});
+
     setSessionSavedBanner(
       `¡Entrenamiento guardado! Completaste ${completed.length} series hoy (${saved.totalVolumeKg.toLocaleString()} kg movidos en total).`
     );
@@ -386,7 +446,9 @@ export const OpenGymHub: React.FC = () => {
   >('ALL');
   const [detailModalExercise, setDetailModalExercise] =
     useState<ExerciseCatalogItem | null>(null);
-  const [detailModalTab, setDetailModalTab] = useState<'demo' | 'history'>('demo');
+  const [detailModalTab, setDetailModalTab] = useState<'demo' | 'history'>(
+    'demo'
+  );
   const [animatedPreviewIds, setAnimatedPreviewIds] = useState<
     Record<string, boolean>
   >({});
@@ -424,13 +486,39 @@ export const OpenGymHub: React.FC = () => {
   // ==========================================================================
   // ESTADO 3: MIS RUTINAS
   // ==========================================================================
-  const [editingRoutine, setEditingRoutine] = useState<WorkoutRoutine>(
-    () => workoutRoutines[0] ?? INITIAL_ROUTINE_FALLBACK
+  const [editingRoutine, setEditingRoutine] = useState<WorkoutRoutine>(() =>
+    workoutRoutines[0] ?? createEmptyRoutineDraft()
   );
+  const [routineExerciseFilter, setRoutineExerciseFilter] = useState('');
   const [exerciseToAddId, setExerciseToAddId] = useState<string>(
     exerciseCatalog[0]?.id ?? 'og-0025'
   );
-  const [routineSavedToast, setRoutineSavedToast] = useState<string | null>(null);
+  const [routineSavedToast, setRoutineSavedToast] = useState<string | null>(
+    null
+  );
+  const [routineErrorToast, setRoutineErrorToast] = useState<string | null>(
+    null
+  );
+
+  const filteredExercisesForRoutinePicker = useMemo(() => {
+    const q = routineExerciseFilter.trim().toLowerCase();
+    if (!q) return exerciseCatalog;
+    return exerciseCatalog.filter(
+      (ex) =>
+        ex.nameEs.toLowerCase().includes(q) ||
+        ex.primaryMuscle.toLowerCase().includes(q) ||
+        ex.equipment.toLowerCase().includes(q)
+    );
+  }, [exerciseCatalog, routineExerciseFilter]);
+
+  useEffect(() => {
+    if (
+      filteredExercisesForRoutinePicker.length > 0 &&
+      !filteredExercisesForRoutinePicker.some((e) => e.id === exerciseToAddId)
+    ) {
+      setExerciseToAddId(filteredExercisesForRoutinePicker[0].id);
+    }
+  }, [filteredExercisesForRoutinePicker, exerciseToAddId]);
 
   const handleMoveRoutineExercise = (fromIdx: number, toIdx: number) => {
     if (toIdx < 0 || toIdx >= editingRoutine.exercises.length) return;
@@ -439,6 +527,39 @@ export const OpenGymHub: React.FC = () => {
     copy.splice(toIdx, 0, moved);
     const reordered = copy.map((item, i) => ({ ...item, order: i + 1 }));
     setEditingRoutine({ ...editingRoutine, exercises: reordered });
+  };
+
+  const handleUseExerciseFromCatalog = (ex: ExerciseCatalogItem) => {
+    if (activeRoutine) {
+      addExerciseToRoutine(activeRoutine.id, ex.id);
+      setSessionSavedBanner(
+        `"${ex.nameEs}" se agregó a tu rutina "${activeRoutine.name}".`
+      );
+      return;
+    }
+
+    const firstRoutine: WorkoutRoutine = {
+      id: `routine-custom-${Date.now()}`,
+      name: 'Mi Rutina 1',
+      assignedDays: [1, 3, 5],
+      exercises: [
+        {
+          exerciseId: ex.id,
+          order: 1,
+          targetSets: 3,
+          targetRepRange: [8, 12],
+          targetRir: 1,
+          restSeconds: 120,
+          progressionRule: 'double_progression',
+        },
+      ],
+    };
+    saveWorkoutRoutine(firstRoutine);
+    setSelectedRoutineId(firstRoutine.id);
+    setEditingRoutine(firstRoutine);
+    setSessionSavedBanner(
+      `Se creó tu rutina "${firstRoutine.name}" con el ejercicio "${ex.nameEs}".`
+    );
   };
 
   // ==========================================================================
@@ -453,7 +574,37 @@ export const OpenGymHub: React.FC = () => {
     [workoutSessions, exerciseCatalog]
   );
 
-  const [synergyExerciseId, setSynergyExerciseId] = useState<string>('og-0043');
+  // Priorizar en el selector de fuerza los ejercicios que el usuario realmente entrena
+  const userTrackedExerciseIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const s of workoutSessions) {
+      for (const st of s.sets) {
+        if (st.isCompleted && st.setType !== 'warmup') {
+          ids.add(st.exerciseId);
+        }
+      }
+    }
+    for (const r of workoutRoutines) {
+      for (const ex of r.exercises) {
+        ids.add(ex.exerciseId);
+      }
+    }
+    return Array.from(ids);
+  }, [workoutSessions, workoutRoutines]);
+
+  const [synergyExerciseId, setSynergyExerciseId] = useState<string>(
+    () => userTrackedExerciseIds[0] ?? exerciseCatalog[0]?.id ?? 'og-0025'
+  );
+
+  useEffect(() => {
+    if (
+      userTrackedExerciseIds.length > 0 &&
+      !userTrackedExerciseIds.includes(synergyExerciseId)
+    ) {
+      setSynergyExerciseId(userTrackedExerciseIds[0]);
+    }
+  }, [userTrackedExerciseIds, synergyExerciseId]);
+
   const synergyReport = useMemo(
     () =>
       evaluateStrengthBodyweightSynergy({
@@ -462,7 +613,17 @@ export const OpenGymHub: React.FC = () => {
         workoutSessions,
         currentPhase: userProfile?.currentPhase ?? 'recomp',
       }),
-    [synergyExerciseId, biometricLogs, workoutSessions, userProfile?.currentPhase]
+    [
+      synergyExerciseId,
+      biometricLogs,
+      workoutSessions,
+      userProfile?.currentPhase,
+    ]
+  );
+
+  const hasStrengthPointsForSelectedExercise = useMemo(
+    () => synergyReport.points.some((p) => p.estimated1RM !== null && p.estimated1RM > 0),
+    [synergyReport.points]
   );
 
   return (
@@ -478,8 +639,9 @@ export const OpenGymHub: React.FC = () => {
             ¿Qué vamos a entrenar hoy?
           </h1>
           <p className="mt-1 text-sm text-slate-600">
-            Elige tu rutina, anota tus repeticiones y marca{' '}
-            <strong className="font-bold text-emerald-700">Listo [✓]</strong> al terminar cada serie.
+            Arma tus propias rutinas, anota tus pesos reales y marca{' '}
+            <strong className="font-bold text-emerald-700">Listo [✓]</strong> al
+            terminar cada serie.
           </p>
         </div>
 
@@ -493,14 +655,14 @@ export const OpenGymHub: React.FC = () => {
                 icon: Zap,
               },
               {
+                id: 'routines',
+                label: `Mis Rutinas (${workoutRoutines.length})`,
+                icon: Layers,
+              },
+              {
                 id: 'catalog',
                 label: `Ejercicios (${exerciseCatalog.length})`,
                 icon: BookOpen,
-              },
-              {
-                id: 'routines',
-                label: 'Mis Rutinas',
-                icon: Layers,
               },
               {
                 id: 'analytics',
@@ -554,319 +716,465 @@ export const OpenGymHub: React.FC = () => {
       {/* ====================================================================
           VISTA 1: ENTRENAR HOY
          ==================================================================== */}
-      {subTab === 'active_workout' && activeRoutine && (
+      {subTab === 'active_workout' && (
         <div className="space-y-6">
-          {/* Selector de rutina y botón de guardar */}
-          <div className="flex flex-col justify-between gap-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center">
-            <div className="flex flex-wrap items-center gap-3">
-              <label className="text-sm font-bold text-slate-700">
-                Rutina de hoy:
-              </label>
-              <select
-                value={selectedRoutineId}
-                onChange={(e) => setSelectedRoutineId(e.target.value)}
-                className="rounded-xl border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm font-bold text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none"
-              >
-                {workoutRoutines.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.name}
-                  </option>
-                ))}
-              </select>
+          {!activeRoutine ? (
+            <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-10 text-center shadow-xs">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600">
+                <Dumbbell className="h-7 w-7" />
+              </div>
+              <h2 className="mt-4 text-xl font-extrabold text-slate-900">
+                Aún no tienes ninguna rutina creada
+              </h2>
+              <p className="mx-auto mt-2 max-w-lg text-sm text-slate-600">
+                Tu cuenta está completamente limpia y lista para tus propios datos. Crea tu primera rutina personalizada o elige ejercicios del catálogo para empezar a registrar tus entrenamientos.
+              </p>
+              <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingRoutine(createEmptyRoutineDraft());
+                    setSubTab('routines');
+                  }}
+                  className="inline-flex items-center gap-2 rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-indigo-500"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span>Crear mi primera rutina</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSubTab('catalog')}
+                  className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-5 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-100"
+                >
+                  <BookOpen className="h-4 w-4 text-indigo-600" />
+                  <span>Explorar ejercicios</span>
+                </button>
+              </div>
             </div>
+          ) : (
+            <>
+              {/* Selector de rutina y botón de guardar */}
+              <div className="flex flex-col justify-between gap-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center">
+                <div className="flex flex-wrap items-center gap-3">
+                  <label className="text-sm font-bold text-slate-700">
+                    Rutina de hoy:
+                  </label>
+                  <select
+                    value={activeRoutine.id}
+                    onChange={(e) => setSelectedRoutineId(e.target.value)}
+                    className="rounded-xl border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm font-bold text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none"
+                  >
+                    {workoutRoutines.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingRoutine(activeRoutine);
+                      setSubTab('routines');
+                    }}
+                    className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-100"
+                  >
+                    Editar rutina
+                  </button>
+                </div>
 
-            <div className="flex flex-wrap items-center gap-5">
-              <div className="text-left sm:text-right">
-                <span className="block text-xs font-semibold text-slate-500">
-                  Avance de hoy
-                </span>
-                <span className="text-base font-extrabold text-slate-900">
-                  {completedSetsCount} de {allCurrentSessionSets.length} series listas
-                </span>
-                {liveSessionTonnageKg > 0 && (
-                  <span className="ml-2 text-xs font-semibold text-emerald-600">
-                    ({liveSessionTonnageKg.toLocaleString()} kg)
-                  </span>
-                )}
+                <div className="flex flex-wrap items-center gap-5">
+                  <div className="text-left sm:text-right">
+                    <span className="block text-xs font-semibold text-slate-500">
+                      Avance de hoy
+                    </span>
+                    <span className="text-base font-extrabold text-slate-900">
+                      {completedSetsCount} de {allCurrentSessionSets.length}{' '}
+                      series listas
+                    </span>
+                    {liveSessionTonnageKg > 0 && (
+                      <span className="ml-2 text-xs font-semibold text-emerald-600">
+                        ({liveSessionTonnageKg.toLocaleString()} kg)
+                      </span>
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={completedSetsCount === 0}
+                    onClick={handleFinishAndSaveWorkout}
+                    className="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <Check className="h-4 w-4" />
+                    <span>Guardar Entrenamiento</span>
+                  </button>
+                </div>
               </div>
 
-              <button
-                type="button"
-                disabled={completedSetsCount === 0}
-                onClick={handleFinishAndSaveWorkout}
-                className="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                <Check className="h-4 w-4" />
-                <span>Guardar Entrenamiento</span>
-              </button>
-            </div>
-          </div>
+              {/* Lista de ejercicios de la rutina */}
+              {activeRoutine.exercises.length === 0 ? (
+                <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-8 text-center">
+                  <p className="text-sm font-bold text-slate-800">
+                    Tu rutina "{activeRoutine.name}" aún no tiene ejercicios
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Usa el selector de abajo para agregar ejercicios a esta rutina.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-5">
+                  {activeRoutine.exercises.map((rEx, exIdx) => {
+                    const exItem = catalogMap.get(rEx.exerciseId);
+                    if (!exItem) return null;
 
-          {/* Lista de ejercicios de la rutina */}
-          <div className="space-y-5">
-            {activeRoutine.exercises.map((rEx, exIdx) => {
-              const exItem = catalogMap.get(rEx.exerciseId);
-              if (!exItem) return null;
+                    const progPlan = getDoubleProgressionSuggestion({
+                      routineExercise: rEx,
+                      catalogItem: exItem,
+                      previousSessions: workoutSessions,
+                    });
 
-              const progPlan = getDoubleProgressionSuggestion({
-                routineExercise: rEx,
-                catalogItem: exItem,
-                previousSessions: workoutSessions,
-              });
+                    const sets = activeSetsByExercise[rEx.exerciseId] ?? [];
 
-              const sets = activeSetsByExercise[rEx.exerciseId] ?? [];
+                    return (
+                      <div
+                        key={rEx.exerciseId}
+                        className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
+                      >
+                        {/* Encabezado del ejercicio */}
+                        <div className="mb-5 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+                          <div className="flex items-center gap-4">
+                            <img
+                              src={exItem.images[0]}
+                              alt={exItem.nameEs}
+                              onClick={() => {
+                                setDetailModalExercise(exItem);
+                                setDetailModalTab('demo');
+                              }}
+                              className="h-16 w-16 cursor-pointer rounded-2xl border border-slate-200 bg-slate-50 object-contain p-1 transition hover:scale-105"
+                            />
+                            <div>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-50 text-xs font-bold text-indigo-700">
+                                  {exIdx + 1}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setDetailModalExercise(exItem);
+                                    setDetailModalTab('demo');
+                                  }}
+                                  className="text-left text-lg font-extrabold text-slate-900 hover:text-indigo-600"
+                                >
+                                  {exItem.nameEs}
+                                </button>
+                              </div>
+                              <p className="mt-1 text-sm text-slate-600">
+                                {exItem.primaryMuscle} · {exItem.equipment} · Meta:{' '}
+                                <strong className="font-bold text-slate-800">
+                                  {rEx.targetSets} series de{' '}
+                                  {rEx.targetRepRange[0]} a{' '}
+                                  {rEx.targetRepRange[1]} repeticiones
+                                </strong>
+                              </p>
+                            </div>
+                          </div>
 
-              return (
-                <div
-                  key={rEx.exerciseId}
-                  className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
-                >
-                  {/* Encabezado del ejercicio */}
-                  <div className="mb-5 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-                    <div className="flex items-center gap-4">
-                      <img
-                        src={exItem.images[0]}
-                        alt={exItem.nameEs}
-                        onClick={() => {
-                          setDetailModalExercise(exItem);
-                          setDetailModalTab('demo');
-                        }}
-                        className="h-16 w-16 cursor-pointer rounded-2xl border border-slate-200 bg-slate-50 object-contain p-1 transition hover:scale-105"
-                      />
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-50 text-xs font-bold text-indigo-700">
-                            {exIdx + 1}
-                          </span>
+                          {/* Sugerencia simple */}
+                          <div
+                            className={`rounded-2xl border px-4 py-2.5 text-xs ${
+                              progPlan.allWorkingSetsHitTopOfRange
+                                ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+                                : 'border-indigo-100 bg-indigo-50/70 text-indigo-900'
+                            }`}
+                          >
+                            <div className="flex items-center gap-1.5 font-bold">
+                              <Sparkles className="h-4 w-4 shrink-0 text-indigo-600" />
+                              <span>
+                                {progPlan.hasHistory
+                                  ? 'Sugerencia según tu historial'
+                                  : 'Primer registro'}
+                              </span>
+                            </div>
+                            <p className="mt-0.5 text-slate-700">
+                              {progPlan.summaryBanner}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Tabla limpia de series */}
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left text-sm">
+                            <thead>
+                              <tr className="border-b border-slate-200 text-xs font-bold uppercase tracking-wider text-slate-500">
+                                <th className="py-2.5 pr-3">Serie</th>
+                                <th className="px-3 py-2.5">
+                                  Vez anterior / Sugerido
+                                </th>
+                                <th className="px-3 py-2.5">Peso (kg)</th>
+                                <th className="px-3 py-2.5">Repeticiones</th>
+                                <th className="py-2.5 pl-3 text-right">
+                                  Estado
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                              {sets.map((s, idx) => {
+                                const ghost =
+                                  progPlan.setSuggestions[idx] ??
+                                  progPlan.setSuggestions[
+                                    progPlan.setSuggestions.length - 1
+                                  ];
+
+                                const isWarmup = s.setType === 'warmup';
+
+                                return (
+                                  <tr
+                                    key={s.id}
+                                    className={`transition ${
+                                      s.isCompleted
+                                        ? 'bg-emerald-50/70'
+                                        : 'hover:bg-slate-50'
+                                    }`}
+                                  >
+                                    {/* Número de serie */}
+                                    <td className="py-3 pr-3">
+                                      <button
+                                        type="button"
+                                        title="Clic para cambiar entre Serie normal y Calentamiento"
+                                        onClick={() =>
+                                          handleCycleSetType(
+                                            rEx.exerciseId,
+                                            s.id
+                                          )
+                                        }
+                                        className={`inline-flex items-center justify-center rounded-xl border px-3 py-1.5 text-xs font-bold transition ${
+                                          isWarmup
+                                            ? 'border-amber-300 bg-amber-50 text-amber-800'
+                                            : 'border-slate-200 bg-slate-100 text-slate-800 hover:bg-slate-200'
+                                        }`}
+                                      >
+                                        {isWarmup
+                                          ? 'Calentamiento'
+                                          : `Serie ${s.setNumber}`}
+                                      </button>
+                                    </td>
+
+                                    {/* Anterior y sugerido */}
+                                    <td className="px-3 py-3 text-xs text-slate-600">
+                                      <div className="font-semibold text-slate-800">
+                                        Anterior:{' '}
+                                        {ghost?.previousText ??
+                                          'Sin registro previo'}
+                                      </div>
+                                      {progPlan.hasHistory && ghost ? (
+                                        <div className="mt-0.5 font-medium text-indigo-600">
+                                          Sugerido hoy:{' '}
+                                          {ghost.suggestedWeightKg} kg ×{' '}
+                                          {ghost.suggestedReps} reps
+                                        </div>
+                                      ) : (
+                                        <div className="mt-0.5 text-slate-500">
+                                          Meta: {rEx.targetRepRange[0]} a{' '}
+                                          {rEx.targetRepRange[1]} reps
+                                        </div>
+                                      )}
+                                    </td>
+
+                                    {/* Input Peso */}
+                                    <td className="px-3 py-3">
+                                      <input
+                                        type="number"
+                                        min={0}
+                                        step={0.5}
+                                        value={s.weightKg || ''}
+                                        placeholder="0"
+                                        onChange={(e) =>
+                                          handleUpdateSetField(
+                                            rEx.exerciseId,
+                                            s.id,
+                                            'weightKg',
+                                            Number(e.target.value)
+                                          )
+                                        }
+                                        className="w-24 rounded-xl border border-slate-300 bg-white px-3 py-2 text-base font-bold text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:outline-none"
+                                      />
+                                    </td>
+
+                                    {/* Input Repeticiones */}
+                                    <td className="px-3 py-3">
+                                      <input
+                                        type="number"
+                                        min={0}
+                                        step={1}
+                                        value={s.reps}
+                                        onChange={(e) =>
+                                          handleUpdateSetField(
+                                            rEx.exerciseId,
+                                            s.id,
+                                            'reps',
+                                            Number(e.target.value)
+                                          )
+                                        }
+                                        className="w-20 rounded-xl border border-slate-300 bg-white px-3 py-2 text-base font-bold text-slate-900 focus:border-indigo-500 focus:outline-none"
+                                      />
+                                    </td>
+
+                                    {/* Botón Listo */}
+                                    <td className="py-3 pl-3 text-right">
+                                      <div className="inline-flex items-center gap-2">
+                                        {(s.isPr1RM || s.isPrWeight) && (
+                                          <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-800">
+                                            🏆 Récord
+                                          </span>
+                                        )}
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            handleToggleCompleteSet(
+                                              rEx.exerciseId,
+                                              s.id,
+                                              rEx.restSeconds,
+                                              exItem.nameEs
+                                            )
+                                          }
+                                          className={`inline-flex items-center gap-1.5 rounded-xl border px-4 py-2 text-xs font-bold transition ${
+                                            s.isCompleted
+                                              ? 'border-emerald-600 bg-emerald-600 text-white shadow-sm'
+                                              : 'border-slate-300 bg-white text-slate-700 hover:border-emerald-500 hover:text-emerald-700'
+                                          }`}
+                                        >
+                                          <Check className="h-4 w-4" />
+                                          <span>
+                                            {s.isCompleted ? 'Listo' : 'Marcar'}
+                                          </span>
+                                        </button>
+                                      </div>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        {/* Pie de tarjeta: agregar serie o ver instrucciones */}
+                        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-4">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleAddSetToExercise(rEx.exerciseId)
+                            }
+                            className="inline-flex items-center gap-1.5 rounded-xl bg-slate-100 px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-200"
+                          >
+                            <Plus className="h-4 w-4" />
+                            <span>Agregar otra serie</span>
+                          </button>
+
                           <button
                             type="button"
                             onClick={() => {
                               setDetailModalExercise(exItem);
                               setDetailModalTab('demo');
                             }}
-                            className="text-left text-lg font-extrabold text-slate-900 hover:text-indigo-600"
+                            className="text-xs font-bold text-indigo-600 hover:text-indigo-500"
                           >
-                            {exItem.nameEs}
+                            Ver cómo se hace paso a paso →
                           </button>
                         </div>
-                        <p className="mt-1 text-sm text-slate-600">
-                          {exItem.primaryMuscle} · {exItem.equipment} · Meta:{' '}
-                          <strong className="font-bold text-slate-800">
-                            {rEx.targetSets} series de {rEx.targetRepRange[0]} a{' '}
-                            {rEx.targetRepRange[1]} repeticiones
-                          </strong>
-                        </p>
                       </div>
-                    </div>
-
-                    {/* Sugerencia simple */}
-                    <div
-                      className={`rounded-2xl border px-4 py-2.5 text-xs ${
-                        progPlan.allWorkingSetsHitTopOfRange
-                          ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
-                          : 'border-indigo-100 bg-indigo-50/70 text-indigo-900'
-                      }`}
-                    >
-                      <div className="flex items-center gap-1.5 font-bold">
-                        <Sparkles className="h-4 w-4 shrink-0 text-indigo-600" />
-                        <span>Sugerencia para hoy</span>
-                      </div>
-                      <p className="mt-0.5 text-slate-700">
-                        {progPlan.summaryBanner}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Tabla limpia de series */}
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm">
-                      <thead>
-                        <tr className="border-b border-slate-200 text-xs font-bold uppercase tracking-wider text-slate-500">
-                          <th className="py-2.5 pr-3">Serie</th>
-                          <th className="px-3 py-2.5">Vez anterior / Sugerido</th>
-                          <th className="px-3 py-2.5">Peso (kg)</th>
-                          <th className="px-3 py-2.5">Repeticiones</th>
-                          <th className="py-2.5 pl-3 text-right">Estado</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {sets.map((s, idx) => {
-                          const ghost =
-                            progPlan.setSuggestions[idx] ??
-                            progPlan.setSuggestions[progPlan.setSuggestions.length - 1];
-
-                          const isWarmup = s.setType === 'warmup';
-
-                          return (
-                            <tr
-                              key={s.id}
-                              className={`transition ${
-                                s.isCompleted ? 'bg-emerald-50/70' : 'hover:bg-slate-50'
-                              }`}
-                            >
-                              {/* Número de serie */}
-                              <td className="py-3 pr-3">
-                                <button
-                                  type="button"
-                                  title="Clic para cambiar entre Serie normal y Calentamiento"
-                                  onClick={() =>
-                                    handleCycleSetType(rEx.exerciseId, s.id)
-                                  }
-                                  className={`inline-flex items-center justify-center rounded-xl border px-3 py-1.5 text-xs font-bold transition ${
-                                    isWarmup
-                                      ? 'border-amber-300 bg-amber-50 text-amber-800'
-                                      : 'border-slate-200 bg-slate-100 text-slate-800 hover:bg-slate-200'
-                                  }`}
-                                >
-                                  {isWarmup ? 'Calentamiento' : `Serie ${s.setNumber}`}
-                                </button>
-                              </td>
-
-                              {/* Anterior y sugerido */}
-                              <td className="px-3 py-3 text-xs text-slate-600">
-                                <div className="font-semibold text-slate-800">
-                                  Anterior: {ghost?.previousText ?? 'Primera vez'}
-                                </div>
-                                {ghost && (
-                                  <div className="mt-0.5 font-medium text-indigo-600">
-                                    Hoy: {ghost.suggestedWeightKg} kg × {ghost.suggestedReps} reps
-                                  </div>
-                                )}
-                              </td>
-
-                              {/* Input Peso */}
-                              <td className="px-3 py-3">
-                                <input
-                                  type="number"
-                                  step={0.5}
-                                  value={s.weightKg}
-                                  onChange={(e) =>
-                                    handleUpdateSetField(
-                                      rEx.exerciseId,
-                                      s.id,
-                                      'weightKg',
-                                      Number(e.target.value)
-                                    )
-                                  }
-                                  className="w-24 rounded-xl border border-slate-300 bg-white px-3 py-2 text-base font-bold text-slate-900 focus:border-indigo-500 focus:outline-none"
-                                />
-                              </td>
-
-                              {/* Input Repeticiones */}
-                              <td className="px-3 py-3">
-                                <input
-                                  type="number"
-                                  step={1}
-                                  value={s.reps}
-                                  onChange={(e) =>
-                                    handleUpdateSetField(
-                                      rEx.exerciseId,
-                                      s.id,
-                                      'reps',
-                                      Number(e.target.value)
-                                    )
-                                  }
-                                  className="w-20 rounded-xl border border-slate-300 bg-white px-3 py-2 text-base font-bold text-slate-900 focus:border-indigo-500 focus:outline-none"
-                                />
-                              </td>
-
-                              {/* Botón Listo */}
-                              <td className="py-3 pl-3 text-right">
-                                <div className="inline-flex items-center gap-2">
-                                  {(s.isPr1RM || s.isPrWeight) && (
-                                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-800">
-                                      🏆 Récord
-                                    </span>
-                                  )}
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      handleToggleCompleteSet(
-                                        rEx.exerciseId,
-                                        s.id,
-                                        rEx.restSeconds,
-                                        exItem.nameEs
-                                      )
-                                    }
-                                    className={`inline-flex items-center gap-1.5 rounded-xl border px-4 py-2 text-xs font-bold transition ${
-                                      s.isCompleted
-                                        ? 'border-emerald-600 bg-emerald-600 text-white shadow-sm'
-                                        : 'border-slate-300 bg-white text-slate-700 hover:border-emerald-500 hover:text-emerald-700'
-                                    }`}
-                                  >
-                                    <Check className="h-4 w-4" />
-                                    <span>{s.isCompleted ? 'Listo' : 'Marcar'}</span>
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {/* Pie de tarjeta: agregar serie o ver instrucciones */}
-                  <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-4">
-                    <button
-                      type="button"
-                      onClick={() => handleAddSetToExercise(rEx.exerciseId)}
-                      className="inline-flex items-center gap-1.5 rounded-xl bg-slate-100 px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-200"
-                    >
-                      <Plus className="h-4 w-4" />
-                      <span>Agregar otra serie</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDetailModalExercise(exItem);
-                        setDetailModalTab('demo');
-                      }}
-                      className="text-xs font-bold text-indigo-600 hover:text-indigo-500"
-                    >
-                      Ver cómo se hace paso a paso →
-                    </button>
-                  </div>
+                    );
+                  })}
                 </div>
-              );
-            })}
-          </div>
+              )}
 
-          {/* Agregar otro ejercicio rápido sin salir */}
-          <div className="flex flex-col justify-between gap-4 rounded-3xl border border-dashed border-slate-300 bg-white p-5 sm:flex-row sm:items-center">
-            <div>
-              <div className="text-sm font-bold text-slate-900">
-                ¿Quieres agregar otro ejercicio hoy?
+              {/* Agregar otro ejercicio rápido sin salir */}
+              <div className="flex flex-col justify-between gap-4 rounded-3xl border border-dashed border-slate-300 bg-white p-5 sm:flex-row sm:items-center">
+                <div>
+                  <div className="text-sm font-bold text-slate-900">
+                    ¿Quieres agregar otro ejercicio a "{activeRoutine.name}"?
+                  </div>
+                  <p className="text-xs text-slate-500">
+                    Elígelo de la lista y se sumará a tu rutina de inmediato
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <select
+                    value={quickAddExerciseId}
+                    onChange={(e) => setQuickAddExerciseId(e.target.value)}
+                    className="rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm font-semibold text-slate-900"
+                  >
+                    {exerciseCatalog.map((ex) => (
+                      <option key={ex.id} value={ex.id}>
+                        {ex.nameEs} ({ex.primaryMuscle})
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      addExerciseToRoutine(
+                        activeRoutine.id,
+                        quickAddExerciseId
+                      );
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-indigo-500"
+                  >
+                    <Plus className="h-4 w-4" />
+                    <span>Agregar Ejercicio</span>
+                  </button>
+                </div>
               </div>
-              <p className="text-xs text-slate-500">
-                Elígelo de la lista y se sumará a tu entrenamiento de inmediato
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2.5">
-              <select
-                value={quickAddExerciseId}
-                onChange={(e) => setQuickAddExerciseId(e.target.value)}
-                className="rounded-xl border border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm font-semibold text-slate-900"
-              >
-                {exerciseCatalog.map((ex) => (
-                  <option key={ex.id} value={ex.id}>
-                    {ex.nameEs} ({ex.primaryMuscle})
-                  </option>
+            </>
+          )}
+
+          {/* Historial real de entrenamientos guardados por el usuario */}
+          {workoutSessions.length > 0 && (
+            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-xs">
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <h2 className="text-lg font-extrabold text-slate-900">
+                    Tus Entrenamientos Registrados
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    Historial real calculado a partir de las sesiones que guardaste
+                  </p>
+                </div>
+                <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-700">
+                  {workoutSessions.length}{' '}
+                  {workoutSessions.length === 1 ? 'sesión' : 'sesiones'}
+                </span>
+              </div>
+
+              <div className="space-y-3">
+                {workoutSessions.slice(0, 6).map((sess) => (
+                  <div
+                    key={sess.id}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-3 text-sm"
+                  >
+                    <div>
+                      <div className="font-bold text-slate-900">
+                        {sess.routineName || 'Entrenamiento'}
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        {sess.date} · {sess.sets.length} series completadas ·{' '}
+                        <strong className="text-slate-700">
+                          {sess.totalVolumeKg.toLocaleString()} kg
+                        </strong>{' '}
+                        movidos
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => deleteWorkoutSession(sess.id)}
+                      className="rounded-xl p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                      title="Eliminar sesión"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
                 ))}
-              </select>
-              <button
-                type="button"
-                onClick={() => {
-                  addExerciseToRoutine(activeRoutine.id, quickAddExerciseId);
-                }}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-indigo-500"
-              >
-                <Plus className="h-4 w-4" />
-                <span>Agregar Ejercicio</span>
-              </button>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       )}
 
@@ -987,20 +1295,13 @@ export const OpenGymHub: React.FC = () => {
                   </div>
 
                   <div className="flex items-center justify-between gap-2 border-t border-slate-100 bg-slate-50/60 px-5 py-3.5">
-                    {activeRoutine && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          addExerciseToRoutine(activeRoutine.id, ex.id);
-                          setSessionSavedBanner(
-                            `"${ex.nameEs}" se agregó a tu rutina "${activeRoutine.name}".`
-                          );
-                        }}
-                        className="rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-800 hover:border-emerald-500 hover:text-emerald-700"
-                      >
-                        + Usar en mi rutina
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => handleUseExerciseFromCatalog(ex)}
+                      className="rounded-xl border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-800 hover:border-emerald-500 hover:text-emerald-700"
+                    >
+                      + Usar en mi rutina
+                    </button>
                     <button
                       type="button"
                       onClick={() => {
@@ -1034,58 +1335,82 @@ export const OpenGymHub: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => {
-                    const fresh: WorkoutRoutine = {
-                      id: `routine-custom-${Date.now()}`,
-                      name: 'Mi Nueva Rutina',
-                      assignedDays: [1, 4],
-                      exercises: [
-                        {
-                          exerciseId: 'og-0025',
-                          order: 1,
-                          targetSets: 3,
-                          targetRepRange: [8, 12],
-                          targetRir: 1,
-                          restSeconds: 120,
-                          progressionRule: 'double_progression',
-                        },
-                      ],
-                    };
-                    setEditingRoutine(fresh);
+                    setEditingRoutine(createEmptyRoutineDraft());
+                    setRoutineErrorToast(null);
+                    setRoutineSavedToast(null);
                   }}
                   className="inline-flex items-center gap-1 rounded-xl bg-indigo-50 px-3 py-1.5 text-xs font-bold text-indigo-700 hover:bg-indigo-100"
                 >
                   <Plus className="h-3.5 w-3.5" />
-                  <span>Nueva</span>
+                  <span>Nueva rutina</span>
                 </button>
               </div>
 
-              <div className="space-y-2.5">
-                {workoutRoutines.map((r) => {
-                  const isSelected = editingRoutine.id === r.id;
-                  return (
-                    <button
-                      key={r.id}
-                      type="button"
-                      onClick={() => setEditingRoutine(r)}
-                      className={`w-full rounded-2xl border p-4 text-left transition ${
-                        isSelected
-                          ? 'border-indigo-600 bg-indigo-50/60'
-                          : 'border-slate-200 bg-slate-50 hover:bg-slate-100'
-                      }`}
-                    >
-                      <div className="text-sm font-extrabold text-slate-900">
-                        {r.name}
+              {workoutRoutines.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-5 text-center text-xs text-slate-500">
+                  Aún no tienes rutinas guardadas. Completa el nombre y los
+                  ejercicios a la derecha y presiona{' '}
+                  <strong className="text-slate-700">Guardar Rutina</strong>.
+                </div>
+              ) : (
+                <div className="space-y-2.5">
+                  {workoutRoutines.map((r) => {
+                    const isSelected = editingRoutine.id === r.id;
+                    return (
+                      <div
+                        key={r.id}
+                        className={`flex items-center justify-between gap-2 rounded-2xl border p-4 transition ${
+                          isSelected
+                            ? 'border-indigo-600 bg-indigo-50/60'
+                            : 'border-slate-200 bg-slate-50 hover:bg-slate-100'
+                        }`}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingRoutine(r);
+                            setRoutineErrorToast(null);
+                          }}
+                          className="min-w-0 flex-1 text-left"
+                        >
+                          <div className="truncate text-sm font-extrabold text-slate-900">
+                            {r.name}
+                          </div>
+                          <div className="mt-1 flex items-center gap-2 text-xs font-medium text-slate-500">
+                            <span>{r.exercises.length} ejercicios</span>
+                            {r.assignedDays.length > 0 && (
+                              <span>
+                                ·{' '}
+                                {r.assignedDays
+                                  .map((d) => DAYS_SHORT[d])
+                                  .join(', ')}
+                              </span>
+                            )}
+                          </div>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            deleteWorkoutRoutine(r.id);
+                            if (editingRoutine.id === r.id) {
+                              const remaining = workoutRoutines.filter(
+                                (item) => item.id !== r.id
+                              );
+                              setEditingRoutine(
+                                remaining[0] ?? createEmptyRoutineDraft()
+                              );
+                            }
+                          }}
+                          className="rounded-xl p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                          title="Eliminar rutina"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
                       </div>
-                      <div className="mt-1 flex items-center justify-between text-xs font-medium text-slate-500">
-                        <span>{r.exercises.length} ejercicios</span>
-                        <span>
-                          {r.assignedDays.map((d) => DAYS_SHORT[d]).join(', ')}
-                        </span>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
 
@@ -1099,27 +1424,53 @@ export const OpenGymHub: React.FC = () => {
                 <input
                   type="text"
                   value={editingRoutine.name}
-                  onChange={(e) =>
-                    setEditingRoutine({ ...editingRoutine, name: e.target.value })
-                  }
-                  className="mt-1.5 w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-2.5 text-base font-extrabold text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none"
+                  placeholder="Ej. Día 1 - Torso, Piernas, Cuerpo Completo..."
+                  onChange={(e) => {
+                    setEditingRoutine({
+                      ...editingRoutine,
+                      name: e.target.value,
+                    });
+                    setRoutineErrorToast(null);
+                  }}
+                  className="mt-1.5 w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-2.5 text-base font-extrabold text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:bg-white focus:outline-none"
                 />
               </div>
 
               <button
                 type="button"
                 onClick={() => {
-                  saveWorkoutRoutine(editingRoutine);
-                  setSelectedRoutineId(editingRoutine.id);
-                  setRoutineSavedToast(`Rutina "${editingRoutine.name}" guardada.`);
+                  const cleanName = editingRoutine.name.trim();
+                  if (!cleanName) {
+                    setRoutineErrorToast(
+                      'Ponle un nombre a tu rutina antes de guardarla.'
+                    );
+                    return;
+                  }
+                  const routineToSave: WorkoutRoutine = {
+                    ...editingRoutine,
+                    name: cleanName,
+                  };
+                  saveWorkoutRoutine(routineToSave);
+                  setEditingRoutine(routineToSave);
+                  setSelectedRoutineId(routineToSave.id);
+                  setRoutineErrorToast(null);
+                  setRoutineSavedToast(
+                    `Rutina "${routineToSave.name}" guardada correctamente.`
+                  );
                   setTimeout(() => setRoutineSavedToast(null), 3500);
                 }}
                 className="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-5 py-3 text-xs font-bold text-white shadow-sm hover:bg-emerald-500"
               >
                 <Check className="h-4 w-4" />
-                <span>Guardar Cambios</span>
+                <span>Guardar Rutina</span>
               </button>
             </div>
+
+            {routineErrorToast && (
+              <div className="mb-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-bold text-rose-800">
+                {routineErrorToast}
+              </div>
+            )}
 
             {routineSavedToast && (
               <div className="mb-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-bold text-emerald-800">
@@ -1130,7 +1481,7 @@ export const OpenGymHub: React.FC = () => {
             {/* Días de la semana */}
             <div className="mb-6">
               <span className="mb-2 block text-xs font-bold text-slate-600">
-                ¿Qué días haces esta rutina?
+                ¿Qué días haces esta rutina? (Opcional)
               </span>
               <div className="flex flex-wrap gap-2">
                 {DAYS_SHORT.map((dayName, dayIdx) => {
@@ -1140,9 +1491,12 @@ export const OpenGymHub: React.FC = () => {
                       key={dayName}
                       type="button"
                       onClick={() => {
-                        const exists = editingRoutine.assignedDays.includes(dayIdx);
+                        const exists =
+                          editingRoutine.assignedDays.includes(dayIdx);
                         const nextDays = exists
-                          ? editingRoutine.assignedDays.filter((d) => d !== dayIdx)
+                          ? editingRoutine.assignedDays.filter(
+                              (d) => d !== dayIdx
+                            )
                           : [...editingRoutine.assignedDays, dayIdx].sort();
                         setEditingRoutine({
                           ...editingRoutine,
@@ -1163,189 +1517,240 @@ export const OpenGymHub: React.FC = () => {
             </div>
 
             {/* Ejercicios dentro de la rutina */}
-            <div className="space-y-3">
-              {editingRoutine.exercises.map((rEx, idx) => {
-                const exInfo = catalogMap.get(rEx.exerciseId);
+            {editingRoutine.exercises.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-600">
+                Aún no agregaste ejercicios a esta rutina. Elige los ejercicios
+                que quieras en el buscador de abajo y presiona{' '}
+                <strong className="text-slate-900">Agregar a la rutina</strong>.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {editingRoutine.exercises.map((rEx, idx) => {
+                  const exInfo = catalogMap.get(rEx.exerciseId);
 
-                return (
-                  <div
-                    key={`${rEx.exerciseId}-${idx}`}
-                    className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-4 sm:flex-row sm:items-center sm:justify-between"
-                  >
-                    <div>
-                      <div className="text-sm font-extrabold text-slate-900">
-                        {idx + 1}. {exInfo?.nameEs ?? rEx.exerciseId}
-                      </div>
-                      <div className="text-xs text-slate-500">
-                        {exInfo?.primaryMuscle} · {exInfo?.equipment}
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-3 text-xs">
+                  return (
+                    <div
+                      key={`${rEx.exerciseId}-${idx}`}
+                      className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-4 sm:flex-row sm:items-center sm:justify-between"
+                    >
                       <div>
-                        <span className="block text-[11px] font-semibold text-slate-500">
-                          Series
-                        </span>
-                        <input
-                          type="number"
-                          min={1}
-                          max={10}
-                          value={rEx.targetSets}
-                          onChange={(e) => {
-                            const next = editingRoutine.exercises.map((item, i) =>
-                              i === idx
-                                ? { ...item, targetSets: Number(e.target.value) }
-                                : item
-                            );
-                            setEditingRoutine({ ...editingRoutine, exercises: next });
-                          }}
-                          className="mt-0.5 w-16 rounded-xl border border-slate-300 bg-white px-2.5 py-1.5 font-bold text-slate-900"
-                        />
-                      </div>
-
-                      <div>
-                        <span className="block text-[11px] font-semibold text-slate-500">
-                          Repeticiones
-                        </span>
-                        <div className="mt-0.5 flex items-center gap-1">
-                          <input
-                            type="number"
-                            min={1}
-                            max={30}
-                            value={rEx.targetRepRange[0]}
-                            onChange={(e) => {
-                              const next = editingRoutine.exercises.map((item, i) =>
-                                i === idx
-                                  ? {
-                                      ...item,
-                                      targetRepRange: [
-                                        Number(e.target.value),
-                                        item.targetRepRange[1],
-                                      ] as [number, number],
-                                    }
-                                  : item
-                              );
-                              setEditingRoutine({ ...editingRoutine, exercises: next });
-                            }}
-                            className="w-14 rounded-xl border border-slate-300 bg-white px-2 py-1.5 font-bold text-slate-900"
-                          />
-                          <span className="text-slate-400">a</span>
-                          <input
-                            type="number"
-                            min={1}
-                            max={30}
-                            value={rEx.targetRepRange[1]}
-                            onChange={(e) => {
-                              const next = editingRoutine.exercises.map((item, i) =>
-                                i === idx
-                                  ? {
-                                      ...item,
-                                      targetRepRange: [
-                                        item.targetRepRange[0],
-                                        Number(e.target.value),
-                                      ] as [number, number],
-                                    }
-                                  : item
-                              );
-                              setEditingRoutine({ ...editingRoutine, exercises: next });
-                            }}
-                            className="w-14 rounded-xl border border-slate-300 bg-white px-2 py-1.5 font-bold text-slate-900"
-                          />
+                        <div className="text-sm font-extrabold text-slate-900">
+                          {idx + 1}. {exInfo?.nameEs ?? rEx.exerciseId}
+                        </div>
+                        <div className="text-xs text-slate-500">
+                          {exInfo?.primaryMuscle} · {exInfo?.equipment}
                         </div>
                       </div>
 
-                      <div>
-                        <span className="block text-[11px] font-semibold text-slate-500">
-                          Descanso (seg)
-                        </span>
-                        <input
-                          type="number"
-                          step={15}
-                          value={rEx.restSeconds}
-                          onChange={(e) => {
-                            const next = editingRoutine.exercises.map((item, i) =>
-                              i === idx
-                                ? { ...item, restSeconds: Number(e.target.value) }
-                                : item
-                            );
-                            setEditingRoutine({ ...editingRoutine, exercises: next });
-                          }}
-                          className="mt-0.5 w-20 rounded-xl border border-slate-300 bg-white px-2.5 py-1.5 font-bold text-slate-900"
-                        />
-                      </div>
+                      <div className="flex flex-wrap items-center gap-3 text-xs">
+                        <div>
+                          <span className="block text-[11px] font-semibold text-slate-500">
+                            Series
+                          </span>
+                          <input
+                            type="number"
+                            min={1}
+                            max={10}
+                            value={rEx.targetSets}
+                            onChange={(e) => {
+                              const next = editingRoutine.exercises.map(
+                                (item, i) =>
+                                  i === idx
+                                    ? {
+                                        ...item,
+                                        targetSets: Number(e.target.value),
+                                      }
+                                    : item
+                              );
+                              setEditingRoutine({
+                                ...editingRoutine,
+                                exercises: next,
+                              });
+                            }}
+                            className="mt-0.5 w-16 rounded-xl border border-slate-300 bg-white px-2.5 py-1.5 font-bold text-slate-900"
+                          />
+                        </div>
 
-                      <div className="flex items-center gap-1 pt-4">
-                        <button
-                          type="button"
-                          onClick={() => handleMoveRoutineExercise(idx, idx - 1)}
-                          className="rounded-lg border border-slate-200 bg-white p-1.5 text-slate-600 hover:bg-slate-100"
-                          title="Subir"
-                        >
-                          <ChevronUp className="h-4 w-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleMoveRoutineExercise(idx, idx + 1)}
-                          className="rounded-lg border border-slate-200 bg-white p-1.5 text-slate-600 hover:bg-slate-100"
-                          title="Bajar"
-                        >
-                          <ChevronDown className="h-4 w-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const next = editingRoutine.exercises
-                              .filter((_, i) => i !== idx)
-                              .map((item, i) => ({ ...item, order: i + 1 }));
-                            setEditingRoutine({ ...editingRoutine, exercises: next });
-                          }}
-                          className="rounded-lg border border-slate-200 bg-white p-1.5 text-rose-600 hover:bg-rose-50"
-                          title="Quitar ejercicio"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                        <div>
+                          <span className="block text-[11px] font-semibold text-slate-500">
+                            Repeticiones
+                          </span>
+                          <div className="mt-0.5 flex items-center gap-1">
+                            <input
+                              type="number"
+                              min={1}
+                              max={30}
+                              value={rEx.targetRepRange[0]}
+                              onChange={(e) => {
+                                const next = editingRoutine.exercises.map(
+                                  (item, i) =>
+                                    i === idx
+                                      ? {
+                                          ...item,
+                                          targetRepRange: [
+                                            Number(e.target.value),
+                                            item.targetRepRange[1],
+                                          ] as [number, number],
+                                        }
+                                      : item
+                                );
+                                setEditingRoutine({
+                                  ...editingRoutine,
+                                  exercises: next,
+                                });
+                              }}
+                              className="w-14 rounded-xl border border-slate-300 bg-white px-2 py-1.5 font-bold text-slate-900"
+                            />
+                            <span className="text-slate-400">a</span>
+                            <input
+                              type="number"
+                              min={1}
+                              max={30}
+                              value={rEx.targetRepRange[1]}
+                              onChange={(e) => {
+                                const next = editingRoutine.exercises.map(
+                                  (item, i) =>
+                                    i === idx
+                                      ? {
+                                          ...item,
+                                          targetRepRange: [
+                                            item.targetRepRange[0],
+                                            Number(e.target.value),
+                                          ] as [number, number],
+                                        }
+                                      : item
+                                );
+                                setEditingRoutine({
+                                  ...editingRoutine,
+                                  exercises: next,
+                                });
+                              }}
+                              className="w-14 rounded-xl border border-slate-300 bg-white px-2 py-1.5 font-bold text-slate-900"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <span className="block text-[11px] font-semibold text-slate-500">
+                            Descanso (seg)
+                          </span>
+                          <input
+                            type="number"
+                            step={15}
+                            value={rEx.restSeconds}
+                            onChange={(e) => {
+                              const next = editingRoutine.exercises.map(
+                                (item, i) =>
+                                  i === idx
+                                    ? {
+                                        ...item,
+                                        restSeconds: Number(e.target.value),
+                                      }
+                                    : item
+                              );
+                              setEditingRoutine({
+                                ...editingRoutine,
+                                exercises: next,
+                              });
+                            }}
+                            className="mt-0.5 w-20 rounded-xl border border-slate-300 bg-white px-2.5 py-1.5 font-bold text-slate-900"
+                          />
+                        </div>
+
+                        <div className="flex items-center gap-1 pt-4">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleMoveRoutineExercise(idx, idx - 1)
+                            }
+                            className="rounded-lg border border-slate-200 bg-white p-1.5 text-slate-600 hover:bg-slate-100"
+                            title="Subir"
+                          >
+                            <ChevronUp className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleMoveRoutineExercise(idx, idx + 1)
+                            }
+                            className="rounded-lg border border-slate-200 bg-white p-1.5 text-slate-600 hover:bg-slate-100"
+                            title="Bajar"
+                          >
+                            <ChevronDown className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const next = editingRoutine.exercises
+                                .filter((_, i) => i !== idx)
+                                .map((item, i) => ({ ...item, order: i + 1 }));
+                              setEditingRoutine({
+                                ...editingRoutine,
+                                exercises: next,
+                              });
+                            }}
+                            className="rounded-lg border border-slate-200 bg-white p-1.5 text-rose-600 hover:bg-rose-50"
+                            title="Quitar ejercicio"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
 
             {/* Agregar ejercicio a la rutina */}
-            <div className="mt-6 flex flex-wrap items-center gap-3 border-t border-slate-100 pt-5">
-              <select
-                value={exerciseToAddId}
-                onChange={(e) => setExerciseToAddId(e.target.value)}
-                className="flex-1 rounded-2xl border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-900"
-              >
-                {exerciseCatalog.map((ex) => (
-                  <option key={ex.id} value={ex.id}>
-                    {ex.nameEs} ({ex.primaryMuscle})
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                onClick={() => {
-                  const nextEx: WorkoutRoutineExercise = {
-                    exerciseId: exerciseToAddId,
-                    order: editingRoutine.exercises.length + 1,
-                    targetSets: 3,
-                    targetRepRange: [8, 12],
-                    targetRir: 1,
-                    restSeconds: 120,
-                    progressionRule: 'double_progression',
-                  };
-                  setEditingRoutine({
-                    ...editingRoutine,
-                    exercises: [...editingRoutine.exercises, nextEx],
-                  });
-                }}
-                className="inline-flex items-center gap-1.5 rounded-2xl bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-indigo-500"
-              >
-                <Plus className="h-4 w-4" />
-                <span>Agregar a la rutina</span>
-              </button>
+            <div className="mt-6 space-y-3 border-t border-slate-100 pt-5">
+              <label className="block text-xs font-bold text-slate-700">
+                Buscar y agregar ejercicio a la rutina
+              </label>
+              <div className="flex flex-col gap-2.5 sm:flex-row">
+                <input
+                  type="text"
+                  value={routineExerciseFilter}
+                  onChange={(e) => setRoutineExerciseFilter(e.target.value)}
+                  placeholder="Filtrar por nombre o músculo (ej. pecho, sentadilla)..."
+                  className="rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-xs font-medium text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:bg-white focus:outline-none sm:w-64"
+                />
+                <select
+                  value={exerciseToAddId}
+                  onChange={(e) => setExerciseToAddId(e.target.value)}
+                  className="flex-1 rounded-2xl border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm font-semibold text-slate-900"
+                >
+                  {filteredExercisesForRoutinePicker.map((ex) => (
+                    <option key={ex.id} value={ex.id}>
+                      {ex.nameEs} ({ex.primaryMuscle})
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  disabled={filteredExercisesForRoutinePicker.length === 0}
+                  onClick={() => {
+                    if (!exerciseToAddId) return;
+                    const nextEx: WorkoutRoutineExercise = {
+                      exerciseId: exerciseToAddId,
+                      order: editingRoutine.exercises.length + 1,
+                      targetSets: 3,
+                      targetRepRange: [8, 12],
+                      targetRir: 1,
+                      restSeconds: 120,
+                      progressionRule: 'double_progression',
+                    };
+                    setEditingRoutine({
+                      ...editingRoutine,
+                      exercises: [...editingRoutine.exercises, nextEx],
+                    });
+                  }}
+                  className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-2xl bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-indigo-500 disabled:opacity-40"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span>Agregar a la rutina</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1362,14 +1767,21 @@ export const OpenGymHub: React.FC = () => {
               Músculos trabajados esta semana
             </h2>
             <p className="mt-1 text-xs text-slate-500">
-              Lo ideal para progresar es hacer entre 10 y 20 series por grupo muscular cada semana.
+              Calculado a partir de tus entrenamientos guardados en los últimos
+              7 días.
             </p>
 
             <div className="mt-5 space-y-3.5">
               {weeklyMuscleVolume.slice(0, 10).map((item) => {
-                const widthPct = Math.min(100, (item.totalEffectiveSets / 20) * 100);
+                const widthPct = Math.min(
+                  100,
+                  (item.totalEffectiveSets / 20) * 100
+                );
                 let barColor = 'bg-slate-400';
-                let friendlyStatus = 'Falta entrenar';
+                let friendlyStatus =
+                  item.totalEffectiveSets === 0
+                    ? 'Sin series aún'
+                    : 'Falta entrenar';
                 if (item.zone === 'mev') {
                   barColor = 'bg-blue-500';
                   friendlyStatus = 'En buen camino';
@@ -1384,7 +1796,9 @@ export const OpenGymHub: React.FC = () => {
                 return (
                   <div key={item.muscle} className="space-y-1.5">
                     <div className="flex items-center justify-between text-xs">
-                      <span className="font-bold text-slate-800">{item.muscle}</span>
+                      <span className="font-bold text-slate-800">
+                        {item.muscle}
+                      </span>
                       <div className="flex items-center gap-2">
                         <span className="font-extrabold text-slate-900">
                           {item.totalEffectiveSets} series
@@ -1414,95 +1828,111 @@ export const OpenGymHub: React.FC = () => {
                   Evolución de tu Fuerza
                 </h2>
                 <p className="text-xs text-slate-500">
-                  Compara tu fuerza máxima con tu peso corporal
+                  Compara tu fuerza máxima real con tu peso corporal
                 </p>
               </div>
 
               <select
                 value={synergyExerciseId}
                 onChange={(e) => setSynergyExerciseId(e.target.value)}
-                className="rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-900"
+                className="max-w-xs rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-xs font-bold text-slate-900"
               >
-                <option value="og-0043">Sentadilla con Barra</option>
-                <option value="og-0025">Press de Banca Plano</option>
-                <option value="og-0085">Peso Muerto Rumano</option>
-                <option value="og-1409">Hip Thrust con Barra</option>
-                <option value="og-0027">Remo con Barra</option>
+                {exerciseCatalog.map((ex) => (
+                  <option key={ex.id} value={ex.id}>
+                    {ex.nameEs}
+                  </option>
+                ))}
               </select>
             </div>
 
-            <div
-              className={`mb-4 rounded-2xl border p-4 text-xs ${
-                synergyReport.isSuccessfulRecompOrRetention
-                  ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
-                  : 'border-indigo-200 bg-indigo-50 text-indigo-900'
-              }`}
-            >
-              <div className="flex items-center gap-2 font-bold">
-                <Award className="h-4 w-4 text-emerald-600" />
-                <span>{synergyReport.synergyBadgeTitle}</span>
+            {!hasStrengthPointsForSelectedExercise ? (
+              <div className="flex h-72 flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center">
+                <BarChart3 className="h-8 w-8 text-slate-400" />
+                <p className="mt-2 text-sm font-bold text-slate-700">
+                  Aún no tienes series registradas para este ejercicio
+                </p>
+                <p className="mt-1 max-w-sm text-xs text-slate-500">
+                  Cuando entrenes y guardes una sesión con este ejercicio, aquí
+                  verás la evolución real de tu fuerza máxima (1RM) junto a tu
+                  peso corporal.
+                </p>
               </div>
-              <p className="mt-1 leading-relaxed text-slate-700">
-                {synergyReport.synergyExplanation}
-              </p>
-            </div>
+            ) : (
+              <>
+                <div
+                  className={`mb-4 rounded-2xl border p-4 text-xs ${
+                    synergyReport.isSuccessfulRecompOrRetention
+                      ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+                      : 'border-indigo-200 bg-indigo-50 text-indigo-900'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 font-bold">
+                    <Award className="h-4 w-4 text-emerald-600" />
+                    <span>{synergyReport.synergyBadgeTitle}</span>
+                  </div>
+                  <p className="mt-1 leading-relaxed text-slate-700">
+                    {synergyReport.synergyExplanation}
+                  </p>
+                </div>
 
-            <div className="h-64 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={synergyReport.points}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                  <XAxis
-                    dataKey="date"
-                    tickFormatter={(v: string) => v.slice(5)}
-                    stroke="#64748b"
-                    fontSize={11}
-                  />
-                  <YAxis
-                    yAxisId="left"
-                    domain={['dataMin - 1', 'dataMax + 1']}
-                    stroke="#059669"
-                    fontSize={11}
-                    tickFormatter={(v: number) => `${v}kg`}
-                  />
-                  <YAxis
-                    yAxisId="right"
-                    orientation="right"
-                    domain={['dataMin - 5', 'dataMax + 5']}
-                    stroke="#4f46e5"
-                    fontSize={11}
-                    tickFormatter={(v: number) => `${v}kg`}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#ffffff',
-                      borderColor: '#e2e8f0',
-                      borderRadius: '12px',
-                      fontSize: '12px',
-                      color: '#0f172a',
-                    }}
-                  />
-                  <Legend wrapperStyle={{ fontSize: '12px' }} />
-                  <Line
-                    yAxisId="left"
-                    type="monotone"
-                    dataKey="trendWeightKg"
-                    name="Tu Peso Promedio (kg)"
-                    stroke="#059669"
-                    strokeWidth={2.5}
-                    dot={{ r: 3 }}
-                  />
-                  <Line
-                    yAxisId="right"
-                    type="monotone"
-                    dataKey="estimated1RM"
-                    name="Fuerza Estimada (kg)"
-                    stroke="#4f46e5"
-                    strokeWidth={3}
-                    dot={{ r: 4 }}
-                  />
-                </ComposedChart>
-              </ResponsiveContainer>
-            </div>
+                <div className="h-64 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart data={synergyReport.points}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                      <XAxis
+                        dataKey="date"
+                        tickFormatter={(v: string) => v.slice(5)}
+                        stroke="#64748b"
+                        fontSize={11}
+                      />
+                      <YAxis
+                        yAxisId="left"
+                        domain={['dataMin - 1', 'dataMax + 1']}
+                        stroke="#059669"
+                        fontSize={11}
+                        tickFormatter={(v: number) => `${v}kg`}
+                      />
+                      <YAxis
+                        yAxisId="right"
+                        orientation="right"
+                        domain={['dataMin - 5', 'dataMax + 5']}
+                        stroke="#4f46e5"
+                        fontSize={11}
+                        tickFormatter={(v: number) => `${v}kg`}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: '#ffffff',
+                          borderColor: '#e2e8f0',
+                          borderRadius: '12px',
+                          fontSize: '12px',
+                          color: '#0f172a',
+                        }}
+                      />
+                      <Legend wrapperStyle={{ fontSize: '12px' }} />
+                      <Line
+                        yAxisId="left"
+                        type="monotone"
+                        dataKey="trendWeightKg"
+                        name="Tu Peso Promedio (kg)"
+                        stroke="#059669"
+                        strokeWidth={2.5}
+                        dot={{ r: 3 }}
+                      />
+                      <Line
+                        yAxisId="right"
+                        type="monotone"
+                        dataKey="estimated1RM"
+                        name="Fuerza Estimada (kg)"
+                        stroke="#4f46e5"
+                        strokeWidth={3}
+                        dot={{ r: 4 }}
+                      />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -1529,7 +1959,8 @@ export const OpenGymHub: React.FC = () => {
               <div className="flex items-start justify-between gap-4 border-b border-slate-100 pb-4">
                 <div>
                   <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-700">
-                    {detailModalExercise.primaryMuscle} · {detailModalExercise.equipment}
+                    {detailModalExercise.primaryMuscle} ·{' '}
+                    {detailModalExercise.equipment}
                   </span>
                   <h3 className="mt-2 text-xl font-extrabold text-slate-900">
                     {detailModalExercise.nameEs}
@@ -1615,36 +2046,51 @@ export const OpenGymHub: React.FC = () => {
 
               {detailModalTab === 'history' && (
                 <div className="mt-5 space-y-3">
-                  {workoutSessions
-                    .filter((s) =>
-                      s.sets.some((st) => st.exerciseId === detailModalExercise.id)
+                  {workoutSessions.filter((s) =>
+                    s.sets.some(
+                      (st) => st.exerciseId === detailModalExercise.id
                     )
-                    .map((sess) => {
-                      const exSets = sess.sets.filter(
-                        (st) => st.exerciseId === detailModalExercise.id
-                      );
-                      return (
-                        <div
-                          key={sess.id}
-                          className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm"
-                        >
-                          <div className="flex justify-between font-bold text-slate-900">
-                            <span>{sess.routineName}</span>
-                            <span className="text-xs text-slate-500">{sess.date}</span>
-                          </div>
-                          <div className="mt-2.5 flex flex-wrap gap-2">
-                            {exSets.map((st) => (
-                              <span
-                                key={st.id}
-                                className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800"
-                              >
-                                {st.weightKg} kg × {st.reps} reps
+                  ).length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-xs text-slate-500">
+                      Aún no tienes entrenamientos registrados con este
+                      ejercicio.
+                    </div>
+                  ) : (
+                    workoutSessions
+                      .filter((s) =>
+                        s.sets.some(
+                          (st) => st.exerciseId === detailModalExercise.id
+                        )
+                      )
+                      .map((sess) => {
+                        const exSets = sess.sets.filter(
+                          (st) => st.exerciseId === detailModalExercise.id
+                        );
+                        return (
+                          <div
+                            key={sess.id}
+                            className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm"
+                          >
+                            <div className="flex justify-between font-bold text-slate-900">
+                              <span>{sess.routineName}</span>
+                              <span className="text-xs text-slate-500">
+                                {sess.date}
                               </span>
-                            ))}
+                            </div>
+                            <div className="mt-2.5 flex flex-wrap gap-2">
+                              {exSets.map((st) => (
+                                <span
+                                  key={st.id}
+                                  className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800"
+                                >
+                                  {st.weightKg} kg × {st.reps} reps
+                                </span>
+                              ))}
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })
+                  )}
                 </div>
               )}
             </motion.div>
@@ -1714,11 +2160,4 @@ export const OpenGymHub: React.FC = () => {
       </AnimatePresence>
     </div>
   );
-};
-
-const INITIAL_ROUTINE_FALLBACK: WorkoutRoutine = {
-  id: 'routine-fallback',
-  name: 'Rutina Base',
-  assignedDays: [1, 4],
-  exercises: [],
 };

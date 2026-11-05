@@ -67,6 +67,13 @@ export const NutritionDashboard: React.FC = () => {
   const [selectedFoodGrams, setSelectedFoodGrams] = useState<number>(150);
   const [offLoading, setOffLoading] = useState<boolean>(false);
   const [offResults, setOffResults] = useState<FoodItem[]>([]);
+  const [isCustomFoodOpen, setIsCustomFoodOpen] = useState<boolean>(false);
+  const [customFoodName, setCustomFoodName] = useState<string>('');
+  const [customKcal100, setCustomKcal100] = useState<number | ''>('');
+  const [customProtein100, setCustomProtein100] = useState<number | ''>('');
+  const [customCarbs100, setCustomCarbs100] = useState<number | ''>('');
+  const [customFat100, setCustomFat100] = useState<number | ''>('');
+  const [customServingGrams, setCustomServingGrams] = useState<number>(100);
 
   const foodsMap = useMemo(
     () => Object.fromEntries(foods.map((f) => [f.id, f])),
@@ -416,8 +423,8 @@ export const NutritionDashboard: React.FC = () => {
             </div>
 
             {/* Buscador */}
-            <div className="flex gap-2">
-              <div className="relative flex-1">
+            <div className="flex flex-wrap gap-2">
+              <div className="relative min-w-[200px] flex-1">
                 <Search className="pointer-events-none absolute top-3 left-3.5 h-4 w-4 text-slate-400" />
                 <input
                   type="text"
@@ -436,7 +443,150 @@ export const NutritionDashboard: React.FC = () => {
                 <Globe className="h-4 w-4 text-blue-600" />
                 <span>{offLoading ? 'Buscando...' : 'Más alimentos'}</span>
               </button>
+              <button
+                type="button"
+                onClick={() => setIsCustomFoodOpen((prev) => !prev)}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100"
+              >
+                <Plus className="h-4 w-4" />
+                <span>Crear alimento</span>
+              </button>
             </div>
+
+            {isCustomFoodOpen && (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!customFoodName.trim() || customKcal100 === '') return;
+                  const newFood: FoodItem = {
+                    id: `custom-${Date.now()}`,
+                    name: customFoodName.trim(),
+                    kcalPer100g: Number(customKcal100) || 0,
+                    proteinPer100g: Number(customProtein100) || 0,
+                    carbsPer100g: Number(customCarbs100) || 0,
+                    fatPer100g: Number(customFat100) || 0,
+                    fiberPer100g: 0,
+                    defaultServingName: `Porción ${customServingGrams}g`,
+                    defaultServingGrams: customServingGrams || 100,
+                    isCustom: true,
+                    isFavorite: true,
+                  };
+                  addCustomFood(newFood);
+                  const preview = calculateFoodItemMacros(
+                    newFood,
+                    newFood.defaultServingGrams
+                  );
+                  addTimelineLog({
+                    date: selectedDate,
+                    hour: activeHourToLog,
+                    foodId: newFood.id,
+                    customLabel: newFood.name,
+                    gramsConsumed: newFood.defaultServingGrams,
+                    overrideMacros: preview,
+                  });
+                  setCustomFoodName('');
+                  setCustomKcal100('');
+                  setCustomProtein100('');
+                  setCustomCarbs100('');
+                  setCustomFat100('');
+                  setIsCustomFoodOpen(false);
+                }}
+                className="mt-3 space-y-3 rounded-2xl border border-emerald-200 bg-emerald-50/40 p-4"
+              >
+                <div className="flex items-center justify-between text-xs font-bold text-emerald-900">
+                  <span>Nuevo alimento personalizado (valores cada 100g)</span>
+                  <button
+                    type="button"
+                    onClick={() => setIsCustomFoodOpen(false)}
+                    className="text-slate-500 hover:text-slate-800"
+                  >
+                    Cerrar
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+                  <input
+                    type="text"
+                    required
+                    value={customFoodName}
+                    onChange={(e) => setCustomFoodName(e.target.value)}
+                    placeholder="Nombre del alimento..."
+                    className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-900 sm:col-span-2"
+                  />
+                  <input
+                    type="number"
+                    min={5}
+                    value={customServingGrams}
+                    onChange={(e) =>
+                      setCustomServingGrams(Number(e.target.value))
+                    }
+                    placeholder="Porción (g)"
+                    title="Gramos por porción"
+                    className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-900"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  <input
+                    type="number"
+                    required
+                    min={0}
+                    step="any"
+                    value={customKcal100}
+                    onChange={(e) =>
+                      setCustomKcal100(
+                        e.target.value === '' ? '' : Number(e.target.value)
+                      )
+                    }
+                    placeholder="Kcal / 100g"
+                    className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-900"
+                  />
+                  <input
+                    type="number"
+                    min={0}
+                    step="any"
+                    value={customProtein100}
+                    onChange={(e) =>
+                      setCustomProtein100(
+                        e.target.value === '' ? '' : Number(e.target.value)
+                      )
+                    }
+                    placeholder="Proteína (g)"
+                    className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-900"
+                  />
+                  <input
+                    type="number"
+                    min={0}
+                    step="any"
+                    value={customCarbs100}
+                    onChange={(e) =>
+                      setCustomCarbs100(
+                        e.target.value === '' ? '' : Number(e.target.value)
+                      )
+                    }
+                    placeholder="Carbos (g)"
+                    className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-900"
+                  />
+                  <input
+                    type="number"
+                    min={0}
+                    step="any"
+                    value={customFat100}
+                    onChange={(e) =>
+                      setCustomFat100(
+                        e.target.value === '' ? '' : Number(e.target.value)
+                      )
+                    }
+                    placeholder="Grasas (g)"
+                    className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-900"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="w-full rounded-xl bg-emerald-600 py-2 text-xs font-bold text-white hover:bg-emerald-500"
+                >
+                  Guardar y añadir a mi comida de hoy
+                </button>
+              </form>
+            )}
 
             {/* Lista de Alimentos */}
             <div className="mt-4 space-y-2">

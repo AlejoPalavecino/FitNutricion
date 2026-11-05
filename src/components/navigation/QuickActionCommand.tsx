@@ -54,6 +54,7 @@ export const QuickActionCommand: React.FC<QuickActionCommandProps> = ({
   );
   const updatePhaseAndMacros = useNutritionStore((s) => s.updatePhaseAndMacros);
   const addExerciseToRoutine = useNutritionStore((s) => s.addExerciseToRoutine);
+  const saveWorkoutRoutine = useNutritionStore((s) => s.saveWorkoutRoutine);
 
   const [query, setQuery] = useState('');
   const [selectedMealHour, setSelectedMealHour] = useState<number>(13);
@@ -61,7 +62,7 @@ export const QuickActionCommand: React.FC<QuickActionCommandProps> = ({
 
   const latestBio = biometricLogs[biometricLogs.length - 1];
   const [quickWeight, setQuickWeight] = useState<number>(
-    latestBio?.scaleWeightKg ?? 80
+    latestBio?.scaleWeightKg ?? 70
   );
 
   useEffect(() => {
@@ -437,18 +438,38 @@ export const QuickActionCommand: React.FC<QuickActionCommandProps> = ({
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-1.5">
-                    {primaryRoutine && (
-                      <button
-                        type="button"
-                        onClick={() => {
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (primaryRoutine) {
                           addExerciseToRoutine(primaryRoutine.id, ex.id);
                           showFeedback(`"${ex.nameEs}" añadido a tu rutina.`);
-                        }}
-                        className="rounded-xl bg-indigo-50 px-2.5 py-1.5 text-xs font-bold text-indigo-700 ring-1 ring-indigo-200 hover:bg-indigo-100"
-                      >
-                        + Rutina
-                      </button>
-                    )}
+                        } else {
+                          saveWorkoutRoutine({
+                            id: `routine-${Date.now()}`,
+                            name: 'Mi Rutina 1',
+                            assignedDays: [new Date().getDay()],
+                            exercises: [
+                              {
+                                exerciseId: ex.id,
+                                order: 1,
+                                targetSets: 3,
+                                targetRepRange: [8, 12],
+                                targetRir: 2,
+                                restSeconds: 120,
+                                progressionRule: 'double_progression',
+                              },
+                            ],
+                          });
+                          showFeedback(
+                            `Rutina "Mi Rutina 1" creada con "${ex.nameEs}".`
+                          );
+                        }
+                      }}
+                      className="rounded-xl bg-indigo-50 px-2.5 py-1.5 text-xs font-bold text-indigo-700 ring-1 ring-indigo-200 hover:bg-indigo-100"
+                    >
+                      + Rutina
+                    </button>
                   </div>
                 </div>
               ))}

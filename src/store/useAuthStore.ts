@@ -5,6 +5,7 @@ import {
   type AuthOperationResult,
 } from '../services/authService';
 import { isSupabaseConnected } from '../services/supabaseClient';
+import { useNutritionStore } from './useNutritionStore';
 
 interface AuthState {
   currentUser: AuthenticatedUser | null;
@@ -31,12 +32,20 @@ export const useAuthStore = create<AuthState>((set) => ({
   initializeAuth: async () => {
     try {
       const user = await authService.getCurrentUser();
+      if (user) {
+        await useNutritionStore
+          .getState()
+          .initializeForUser(user, { isNewRegistration: false });
+      } else {
+        useNutritionStore.getState().clearActiveSessionState();
+      }
       set({
         currentUser: user,
         isInitialized: true,
         isCloudActive: isSupabaseConnected(),
       });
     } catch {
+      useNutritionStore.getState().clearActiveSessionState();
       set({
         currentUser: null,
         isInitialized: true,
@@ -50,6 +59,9 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       const result = await authService.loginWithEmail({ email, password });
       if (result.success && result.user) {
+        await useNutritionStore
+          .getState()
+          .initializeForUser(result.user, { isNewRegistration: false });
         set({ currentUser: result.user });
       }
       return result;
@@ -67,6 +79,9 @@ export const useAuthStore = create<AuthState>((set) => ({
         password,
       });
       if (result.success && result.user) {
+        await useNutritionStore
+          .getState()
+          .initializeForUser(result.user, { isNewRegistration: true });
         set({ currentUser: result.user });
       }
       return result;
@@ -76,6 +91,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   logout: async (wipeDeviceData = false) => {
+    useNutritionStore.getState().clearActiveSessionState();
     await authService.logout(wipeDeviceData);
     set({ currentUser: null });
   },

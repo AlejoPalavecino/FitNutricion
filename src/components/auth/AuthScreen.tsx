@@ -147,7 +147,7 @@ export const AuthScreen: React.FC = () => {
                     autoComplete="name"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
-                    placeholder="Ej. Alejandro"
+                    placeholder="Tu nombre"
                     className="w-full rounded-xl border border-slate-300 bg-slate-50 py-3 pr-4 pl-10 text-sm font-medium text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:bg-white focus:outline-none"
                   />
                 </div>
