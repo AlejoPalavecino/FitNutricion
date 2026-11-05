@@ -3,6 +3,7 @@ import type {
   BiologicalSex,
   BiometricLog,
   FoodItem,
+  MetabolicCheckin,
   NutritionalPhase,
   ProgressionRuleType,
   Recipe,
@@ -28,8 +29,22 @@ import {
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-function isValidUuid(val: string | undefined): boolean {
+export function isValidUuid(val: string | undefined): boolean {
   return Boolean(val && UUID_REGEX.test(val));
+}
+
+export function generateUuid(): string {
+  if (
+    typeof crypto !== 'undefined' &&
+    typeof crypto.randomUUID === 'function'
+  ) {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
 }
 
 export const LEGACY_SEED_ROUTINE_IDS = new Set([
@@ -53,7 +68,9 @@ export interface HydratedCloudUserData {
   hasRemoteProfile: boolean;
   userProfile: UserProfile | null;
   biometricLogs: BiometricLog[];
+  customFoods: FoodItem[];
   timelineLogs: TimelineLog[];
+  metabolicCheckins: MetabolicCheckin[];
   workoutRoutines: WorkoutRoutine[];
   workoutSessions: WorkoutSession[];
 }
@@ -142,35 +159,51 @@ export const cloudSyncService = {
     try {
       await this.purgeCloudSeedData(userId);
 
-      const [profileRes, bioRes, tlRes, routinesRes, sessionsRes] =
-        await Promise.all([
-          supabase
-            .from('user_profiles')
-            .select('*')
-            .eq('id', userId)
-            .maybeSingle(),
-          supabase
-            .from('biometric_logs')
-            .select('*')
-            .eq('user_id', userId)
-            .order('date', { ascending: true }),
-          supabase
-            .from('timeline_logs')
-            .select('*')
-            .eq('user_id', userId)
-            .order('date', { ascending: true }),
-          supabase
-            .from('workout_routines')
-            .select(
-              '*, workout_routine_days(day_of_week), workout_routine_exercises(*)'
-            )
-            .eq('user_id', userId),
-          supabase
-            .from('workout_sessions')
-            .select('*, workout_set_logs(*)')
-            .eq('user_id', userId)
-            .order('date', { ascending: false }),
-        ]);
+      const [
+        profileRes,
+        bioRes,
+        customFoodsRes,
+        tlRes,
+        checkinsRes,
+        routinesRes,
+        sessionsRes,
+      ] = await Promise.all([
+        supabase
+          .from('user_profiles')
+          .select('*')
+          .eq('id', userId)
+          .maybeSingle(),
+        supabase
+          .from('biometric_logs')
+          .select('*')
+          .eq('user_id', userId)
+          .order('date', { ascending: true }),
+        supabase
+          .from('food_items')
+          .select('*')
+          .eq('owner_user_id', userId),
+        supabase
+          .from('timeline_logs')
+          .select('*')
+          .eq('user_id', userId)
+          .order('date', { ascending: true }),
+        supabase
+          .from('metabolic_checkins')
+          .select('*')
+          .eq('user_id', userId)
+          .order('week_date', { ascending: false }),
+        supabase
+          .from('workout_routines')
+          .select(
+            '*, workout_routine_days(day_of_week), workout_routine_exercises(*)'
+          )
+          .eq('user_id', userId),
+        supabase
+          .from('workout_sessions')
+          .select('*, workout_set_logs(*)')
+          .eq('user_id', userId)
+          .order('date', { ascending: false }),
+      ]);
 
       const rawProfile = profileRes.data;
       const heightCm = Number(rawProfile?.height_cm ?? 170);
@@ -301,7 +334,28 @@ export const cloudSyncService = {
         };
       }
 
-      const foodMap = new Map(foods.map((f) => [f.id, f]));
+      const customFoods: FoodItem[] = (customFoodsRes.data ?? []).map(
+        (row: Record<string, any>) => ({
+          id: String(row.id),
+          barcode: row.barcode ? String(row.barcode) : undefined,
+          name: String(row.name ?? 'Alimento personalizado'),
+          brand: row.brand ? String(row.brand) : undefined,
+          kcalPer100g: Number(row.kcal_per_100g ?? 0),
+          proteinPer100g: Number(row.protein_per_100g ?? 0),
+          carbsPer100g: Number(row.carbs_per_100g ?? 0),
+          fatPer100g: Number(row.fat_per_100g ?? 0),
+          fiberPer100g: Number(row.fiber_per_100g ?? 0),
+          defaultServingName: String(row.default_serving_name ?? 'Porción'),
+          defaultServingGrams: Number(row.default_serving_grams ?? 100),
+          isCustom: true,
+          isFavorite: Boolean(row.is_favorite),
+          isBridgeFood: Boolean(row.is_bridge_food),
+        })
+      );
+
+      const foodMap = new Map(
+        [...customFoods, ...foods].map((f) => [f.id, f])
+      );
       const recipeMap = new Map(recipes.map((r) => [r.id, r]));
 
       const timelineLogs: TimelineLog[] = (tlRes.data ?? [])
@@ -349,6 +403,29 @@ export const cloudSyncService = {
             calculatedMacros,
           };
         });
+
+      const metabolicCheckins: MetabolicCheckin[] = (
+        checkinsRes.data ?? []
+      ).map((row: Record<string, any>) => ({
+        id: String(row.id),
+        weekDate: String(row.week_date),
+        avgDailyIntakeKcal: Number(row.avg_daily_intake_kcal ?? 0),
+        weightSlopeKgPerWeek: Number(row.weight_slope_kg_per_week ?? 0),
+        calculatedRealTdee: Number(row.calculated_real_tdee ?? 0),
+        previousTdee: Number(row.previous_tdee ?? 0),
+        appliedTdee: Number(row.applied_tdee ?? 0),
+        userApproved: Boolean(row.user_approved),
+        loggedDaysInWindow:
+          row.logged_days_in_window !== null &&
+          row.logged_days_in_window !== undefined
+            ? Number(row.logged_days_in_window)
+            : undefined,
+        imputedDaysInWindow:
+          row.imputed_days_in_window !== null &&
+          row.imputed_days_in_window !== undefined
+            ? Number(row.imputed_days_in_window)
+            : undefined,
+      }));
 
       const workoutRoutines: WorkoutRoutine[] = (routinesRes.data ?? [])
         .filter(
@@ -453,7 +530,9 @@ export const cloudSyncService = {
         hasRemoteProfile: Boolean(userProfile),
         userProfile,
         biometricLogs,
+        customFoods,
         timelineLogs,
+        metabolicCheckins,
         workoutRoutines,
         workoutSessions,
       };
@@ -526,6 +605,37 @@ export const cloudSyncService = {
   },
 
   /**
+   * Sincroniza alimentos personalizados del usuario (`food_items`).
+   */
+  async upsertCustomFood(userId: string, food: FoodItem): Promise<void> {
+    if (!supabase || !isValidUuid(userId)) return;
+    try {
+      await supabase.from('food_items').upsert(
+        {
+          id: food.id,
+          owner_user_id: userId,
+          barcode: food.barcode ?? null,
+          name: food.name,
+          brand: food.brand ?? null,
+          kcal_per_100g: food.kcalPer100g,
+          protein_per_100g: food.proteinPer100g,
+          carbs_per_100g: food.carbsPer100g,
+          fat_per_100g: food.fatPer100g,
+          fiber_per_100g: food.fiberPer100g ?? 0,
+          default_serving_name: food.defaultServingName,
+          default_serving_grams: food.defaultServingGrams,
+          is_custom: true,
+          is_favorite: Boolean(food.isFavorite),
+          is_bridge_food: Boolean(food.isBridgeFood),
+        },
+        { onConflict: 'id' }
+      );
+    } catch {
+      // Mantiene copia local
+    }
+  },
+
+  /**
    * Sincroniza `timeline_logs` (3FN: solo `food_id`/`recipe_id` y `grams_consumed`, sin `calculated_macros`).
    */
   async insertTimelineLog(userId: string, log: TimelineLog): Promise<void> {
@@ -544,7 +654,29 @@ export const cloudSyncService = {
         payload.id = log.id;
       }
 
-      await supabase.from('timeline_logs').insert(payload);
+      await supabase
+        .from('timeline_logs')
+        .upsert(payload, { onConflict: 'id' });
+    } catch {
+      // Mantiene copia local
+    }
+  },
+
+  /**
+   * Actualiza los gramos de un registro de `timeline_logs`.
+   */
+  async updateTimelineLogGrams(
+    userId: string,
+    logId: string,
+    gramsConsumed: number
+  ): Promise<void> {
+    if (!supabase || !isValidUuid(userId) || !isValidUuid(logId)) return;
+    try {
+      await supabase
+        .from('timeline_logs')
+        .update({ grams_consumed: gramsConsumed })
+        .eq('id', logId)
+        .eq('user_id', userId);
     } catch {
       // Mantiene copia local
     }
@@ -563,6 +695,38 @@ export const cloudSyncService = {
         .eq('user_id', userId);
     } catch {
       // Ignorar si es local
+    }
+  },
+
+  /**
+   * Sincroniza una revisión metabólica semanal (`metabolic_checkins`).
+   */
+  async insertMetabolicCheckin(
+    userId: string,
+    checkin: MetabolicCheckin
+  ): Promise<void> {
+    if (!supabase || !isValidUuid(userId)) return;
+    try {
+      const payload: Record<string, unknown> = {
+        user_id: userId,
+        week_date: checkin.weekDate,
+        avg_daily_intake_kcal: checkin.avgDailyIntakeKcal,
+        weight_slope_kg_per_week: checkin.weightSlopeKgPerWeek,
+        calculated_real_tdee: checkin.calculatedRealTdee,
+        previous_tdee: checkin.previousTdee,
+        applied_tdee: checkin.appliedTdee,
+        user_approved: checkin.userApproved,
+        logged_days_in_window: checkin.loggedDaysInWindow ?? null,
+        imputed_days_in_window: checkin.imputedDaysInWindow ?? null,
+      };
+      if (isValidUuid(checkin.id)) {
+        payload.id = checkin.id;
+      }
+      await supabase
+        .from('metabolic_checkins')
+        .upsert(payload, { onConflict: 'id' });
+    } catch {
+      // Mantiene copia local
     }
   },
 
@@ -658,19 +822,24 @@ export const cloudSyncService = {
   ): Promise<void> {
     if (!supabase || !isValidUuid(userId)) return;
     try {
-      const { error: sessErr } = await supabase.from('workout_sessions').insert({
-        id: session.id,
-        user_id: userId,
-        routine_id: session.routineId ?? null,
-        date: session.date,
-        start_time: session.startTime,
-        end_time: session.endTime,
-        duration_minutes: session.durationMinutes,
-        bodyweight_kg_at_session: session.bodyweightKgAtSession,
-      });
+      const { error: sessErr } = await supabase
+        .from('workout_sessions')
+        .upsert(
+          {
+            id: session.id,
+            user_id: userId,
+            routine_id: session.routineId ?? null,
+            date: session.date,
+            start_time: session.startTime,
+            end_time: session.endTime,
+            duration_minutes: session.durationMinutes,
+            bodyweight_kg_at_session: session.bodyweightKgAtSession,
+          },
+          { onConflict: 'id' }
+        );
 
       if (!sessErr && session.sets.length > 0) {
-        await supabase.from('workout_set_logs').insert(
+        await supabase.from('workout_set_logs').upsert(
           session.sets.map((s) => ({
             id: s.id,
             session_id: session.id,
@@ -683,7 +852,8 @@ export const cloudSyncService = {
             is_completed: s.isCompleted,
             is_pr_weight: s.isPrWeight,
             is_pr_1rm: s.isPr1RM,
-          }))
+          })),
+          { onConflict: 'id' }
         );
       }
     } catch {

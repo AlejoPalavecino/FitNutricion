@@ -13,6 +13,7 @@ import type {
   UserProfile,
   WorkoutRoutine,
   WorkoutSession,
+  WorkoutSetLog,
 } from '../types/nutrition';
 import {
   calculateAdaptiveTdee,
@@ -37,6 +38,7 @@ import { OPENGYM_EXERCISE_CATALOG } from '../data/opengymCatalog';
 import { offlineFirstStorage } from '../lib/storage';
 import {
   cloudSyncService,
+  generateUuid,
   isSeedRecordId,
 } from '../services/cloudSyncService';
 import type { AuthenticatedUser } from '../services/authService';
@@ -70,6 +72,31 @@ export interface AddBiometricPayload {
   steps?: number;
 }
 
+export interface ActiveWorkoutDraft {
+  routineId: string;
+  startedAtIso: string;
+  setsByExercise: Record<string, WorkoutSetLog[]>;
+  restTimerEndsAtMs: number | null;
+  restTimerTotalSeconds: number;
+  restTimerExerciseName: string;
+  updatedAt: string;
+}
+
+export interface OnboardingDraft {
+  step: 1 | 2 | 3;
+  name: string;
+  sex: BiologicalSex;
+  birthDate: string;
+  heightCm: number | '';
+  weightKg: number | '';
+  pal: number;
+  experience: TrainingExperience;
+  neckCm: number | '';
+  waistCm: number | '';
+  hipCm: number | '';
+  selectedPhase: NutritionalPhase | null;
+}
+
 interface PersistedUserSnapshot {
   userProfile: UserProfile | null;
   biometricLogs: BiometricLog[];
@@ -81,6 +108,10 @@ interface PersistedUserSnapshot {
   customExercises: ExerciseCatalogItem[];
   workoutRoutines: WorkoutRoutine[];
   workoutSessions: WorkoutSession[];
+  activeWorkoutDraft: ActiveWorkoutDraft | null;
+  routineEditorDraft: WorkoutRoutine | null;
+  onboardingDraft: OnboardingDraft | null;
+  deletedRecordIds: string[];
 }
 
 export interface NutritionState {
@@ -99,12 +130,38 @@ export interface NutritionState {
   workoutRoutines: WorkoutRoutine[];
   workoutSessions: WorkoutSession[];
 
+  // Borradores persistentes para evitar cualquier pérdida de datos al navegar o recargar
+  activeWorkoutDraft: ActiveWorkoutDraft | null;
+  routineEditorDraft: WorkoutRoutine | null;
+  onboardingDraft: OnboardingDraft | null;
+  deletedRecordIds: string[];
+
   // Inicialización y aislamiento por cuenta de usuario
   initializeForUser: (
     user: AuthenticatedUser,
     options?: { isNewRegistration?: boolean }
   ) => Promise<void>;
   clearActiveSessionState: () => void;
+
+  // Acciones de borradores persistentes
+  setActiveWorkoutDraft: (
+    updater:
+      | ActiveWorkoutDraft
+      | null
+      | ((prev: ActiveWorkoutDraft | null) => ActiveWorkoutDraft | null)
+  ) => void;
+  setRoutineEditorDraft: (
+    updater:
+      | WorkoutRoutine
+      | null
+      | ((prev: WorkoutRoutine | null) => WorkoutRoutine | null)
+  ) => void;
+  setOnboardingDraft: (
+    updater:
+      | OnboardingDraft
+      | null
+      | ((prev: OnboardingDraft | null) => OnboardingDraft | null)
+  ) => void;
 
   // Acciones Fase 1 & 2 (Onboarding, Diagnóstico Antropométrico y Motor Metabólico)
   completeOnboarding: (payload: CompleteOnboardingPayload) => void;
@@ -177,6 +234,10 @@ function sanitizeSnapshot(
   raw: Partial<PersistedUserSnapshot> | null | undefined,
   user: AuthenticatedUser
 ): PersistedUserSnapshot {
+  const deletedSet = new Set(
+    Array.isArray(raw?.deletedRecordIds) ? raw.deletedRecordIds : []
+  );
+
   const rawProfile = raw?.userProfile ?? null;
   const isMockProfile =
     !rawProfile ||
@@ -192,27 +253,35 @@ function sanitizeSnapshot(
       };
 
   const cleanBiometricLogs = Array.isArray(raw?.biometricLogs)
-    ? raw.biometricLogs.filter((b) => b && !isSeedRecordId(b.id))
+    ? raw.biometricLogs.filter(
+        (b) => b && !isSeedRecordId(b.id) && !deletedSet.has(b.id)
+      )
     : [];
 
   const cleanTimelineLogs = Array.isArray(raw?.timelineLogs)
-    ? raw.timelineLogs.filter((t) => t && !isSeedRecordId(t.id))
+    ? raw.timelineLogs.filter(
+        (t) => t && !isSeedRecordId(t.id) && !deletedSet.has(t.id)
+      )
     : [];
 
   const cleanCheckins = Array.isArray(raw?.metabolicCheckins)
-    ? raw.metabolicCheckins
+    ? raw.metabolicCheckins.filter((c) => c && !deletedSet.has(c.id))
     : [];
 
   const cleanRoutines = Array.isArray(raw?.workoutRoutines)
-    ? raw.workoutRoutines.filter((r) => r && !isSeedRecordId(r.id))
+    ? raw.workoutRoutines.filter(
+        (r) => r && !isSeedRecordId(r.id) && !deletedSet.has(r.id)
+      )
     : [];
 
   const cleanSessions = Array.isArray(raw?.workoutSessions)
-    ? raw.workoutSessions.filter((s) => s && !isSeedRecordId(s.id))
+    ? raw.workoutSessions.filter(
+        (s) => s && !isSeedRecordId(s.id) && !deletedSet.has(s.id)
+      )
     : [];
 
   const customFoods = Array.isArray(raw?.customFoods)
-    ? raw.customFoods.filter((f) => f && f.isCustom)
+    ? raw.customFoods.filter((f) => f && f.isCustom && !deletedSet.has(f.id))
     : [];
 
   const favoriteFoodIds = Array.isArray(raw?.favoriteFoodIds)
@@ -238,6 +307,10 @@ function sanitizeSnapshot(
     customExercises,
     workoutRoutines: cleanRoutines,
     workoutSessions: cleanSessions,
+    activeWorkoutDraft: raw?.activeWorkoutDraft ?? null,
+    routineEditorDraft: raw?.routineEditorDraft ?? null,
+    onboardingDraft: raw?.onboardingDraft ?? null,
+    deletedRecordIds: Array.from(deletedSet),
   };
 }
 
@@ -260,6 +333,10 @@ function persistCurrentUserState(state: NutritionState): void {
     ),
     workoutRoutines: state.workoutRoutines,
     workoutSessions: state.workoutSessions,
+    activeWorkoutDraft: state.activeWorkoutDraft,
+    routineEditorDraft: state.routineEditorDraft,
+    onboardingDraft: state.onboardingDraft,
+    deletedRecordIds: state.deletedRecordIds,
   };
 
   void offlineFirstStorage.setItem(
@@ -283,6 +360,11 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
   workoutRoutines: [],
   workoutSessions: [],
 
+  activeWorkoutDraft: null,
+  routineEditorDraft: null,
+  onboardingDraft: null,
+  deletedRecordIds: [],
+
   initializeForUser: async (user, options) => {
     await purgeLegacyGlobalMockStorage();
 
@@ -302,6 +384,10 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
         exerciseCatalog: OPENGYM_EXERCISE_CATALOG,
         workoutRoutines: [],
         workoutSessions: [],
+        activeWorkoutDraft: null,
+        routineEditorDraft: null,
+        onboardingDraft: null,
+        deletedRecordIds: [],
       });
       persistCurrentUserState(get());
       await cloudSyncService.purgeCloudSeedData(user.id);
@@ -323,6 +409,10 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
         exerciseCatalog: OPENGYM_EXERCISE_CATALOG,
         workoutRoutines: [],
         workoutSessions: [],
+        activeWorkoutDraft: null,
+        routineEditorDraft: null,
+        onboardingDraft: null,
+        deletedRecordIds: [],
       });
     }
 
@@ -366,9 +456,13 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
       exerciseCatalog: mergedExercises,
       workoutRoutines: localSnapshot.workoutRoutines,
       workoutSessions: localSnapshot.workoutSessions,
+      activeWorkoutDraft: localSnapshot.activeWorkoutDraft,
+      routineEditorDraft: localSnapshot.routineEditorDraft,
+      onboardingDraft: localSnapshot.onboardingDraft,
+      deletedRecordIds: localSnapshot.deletedRecordIds,
     });
 
-    // Si Supabase Cloud está activo, hidratar datos reales remotos del usuario
+    // Si Supabase Cloud está activo, hidratar y fusionar sin perder ningún registro local
     const cloudData = await cloudSyncService.fetchUserCloudData(
       user.id,
       mergedFoods,
@@ -376,25 +470,140 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
     );
 
     if (cloudData) {
-      set((current) => ({
-        userProfile: cloudData.userProfile ?? current.userProfile,
-        biometricLogs:
-          cloudData.biometricLogs.length > 0
-            ? cloudData.biometricLogs
-            : current.biometricLogs,
-        timelineLogs:
-          cloudData.timelineLogs.length > 0
-            ? cloudData.timelineLogs
-            : current.timelineLogs,
-        workoutRoutines:
-          cloudData.workoutRoutines.length > 0
-            ? cloudData.workoutRoutines
-            : current.workoutRoutines,
-        workoutSessions:
-          cloudData.workoutSessions.length > 0
-            ? cloudData.workoutSessions
-            : current.workoutSessions,
-      }));
+      const current = get();
+      const deletedSet = new Set(current.deletedRecordIds);
+
+      // 1. Perfil: elegir el más reciente entre local y nube
+      let finalProfile = current.userProfile;
+      if (cloudData.userProfile && current.userProfile) {
+        finalProfile =
+          cloudData.userProfile.updatedAt >= current.userProfile.updatedAt
+            ? cloudData.userProfile
+            : current.userProfile;
+      } else {
+        finalProfile = cloudData.userProfile ?? current.userProfile;
+      }
+
+      // 2. Alimentos personalizados: unión por ID
+      const customFoodMap = new Map<string, FoodItem>();
+      for (const cf of cloudData.customFoods) {
+        if (!deletedSet.has(cf.id)) customFoodMap.set(cf.id, cf);
+      }
+      for (const lf of current.foods.filter((f) => f.isCustom)) {
+        if (!deletedSet.has(lf.id)) customFoodMap.set(lf.id, lf);
+      }
+      const finalFoods = [
+        ...Array.from(customFoodMap.values()),
+        ...INITIAL_FOOD_ITEMS.map((f) => ({
+          ...f,
+          isFavorite: favSet.has(f.id),
+        })),
+      ];
+
+      // 3. Biometría: unión por fecha (priorizando local si fue editado)
+      const bioByDate = new Map<string, BiometricLog>();
+      for (const cb of cloudData.biometricLogs) {
+        if (!deletedSet.has(cb.id)) bioByDate.set(cb.date, cb);
+      }
+      for (const lb of current.biometricLogs) {
+        if (!deletedSet.has(lb.id)) bioByDate.set(lb.date, lb);
+      }
+      const finalBioLogs = recalculateBiometricTrends(
+        Array.from(bioByDate.values()).sort((a, b) =>
+          a.date.localeCompare(b.date)
+        ),
+        finalProfile?.ewmaAlpha ?? 0.12
+      );
+
+      // 4. Comidas registradas (timelineLogs): unión por ID
+      const tlById = new Map<string, TimelineLog>();
+      for (const ct of cloudData.timelineLogs) {
+        if (!deletedSet.has(ct.id)) tlById.set(ct.id, ct);
+      }
+      for (const lt of current.timelineLogs) {
+        if (!deletedSet.has(lt.id)) tlById.set(lt.id, lt);
+      }
+      const finalTimelineLogs = Array.from(tlById.values());
+
+      // 5. Check-ins metabólicos: unión por ID
+      const checkinById = new Map<string, MetabolicCheckin>();
+      for (const cc of cloudData.metabolicCheckins) {
+        if (!deletedSet.has(cc.id)) checkinById.set(cc.id, cc);
+      }
+      for (const lc of current.metabolicCheckins) {
+        if (!deletedSet.has(lc.id)) checkinById.set(lc.id, lc);
+      }
+      const finalCheckins = Array.from(checkinById.values()).sort((a, b) =>
+        b.weekDate.localeCompare(a.weekDate)
+      );
+
+      // 6. Rutinas: unión por ID (priorizando la versión local por si hubo cambios recientes)
+      const routineById = new Map<string, WorkoutRoutine>();
+      for (const cr of cloudData.workoutRoutines) {
+        if (!deletedSet.has(cr.id)) routineById.set(cr.id, cr);
+      }
+      for (const lr of current.workoutRoutines) {
+        if (!deletedSet.has(lr.id)) routineById.set(lr.id, lr);
+      }
+      const finalRoutines = Array.from(routineById.values());
+
+      // 7. Sesiones de gimnasio: unión por ID
+      const sessionById = new Map<string, WorkoutSession>();
+      for (const cs of cloudData.workoutSessions) {
+        if (!deletedSet.has(cs.id)) sessionById.set(cs.id, cs);
+      }
+      for (const ls of current.workoutSessions) {
+        if (!deletedSet.has(ls.id)) sessionById.set(ls.id, ls);
+      }
+      const finalSessions = Array.from(sessionById.values()).sort((a, b) =>
+        b.date.localeCompare(a.date)
+      );
+
+      set({
+        userProfile: finalProfile,
+        foods: finalFoods,
+        biometricLogs: finalBioLogs,
+        timelineLogs: finalTimelineLogs,
+        metabolicCheckins: finalCheckins,
+        workoutRoutines: finalRoutines,
+        workoutSessions: finalSessions,
+      });
+
+      // Re-sincronizar en segundo plano hacia Supabase cualquier dato local pendiente
+      if (finalProfile) {
+        void cloudSyncService.upsertUserProfile(user.id, finalProfile);
+      }
+      for (const cf of customFoodMap.values()) {
+        void cloudSyncService.upsertCustomFood(user.id, cf);
+      }
+      const cloudBioDates = new Set(cloudData.biometricLogs.map((b) => b.date));
+      for (const lb of finalBioLogs) {
+        if (!cloudBioDates.has(lb.date)) {
+          void cloudSyncService.upsertBiometricLog(user.id, lb);
+        }
+      }
+      const cloudTlIds = new Set(cloudData.timelineLogs.map((t) => t.id));
+      for (const lt of finalTimelineLogs) {
+        if (!cloudTlIds.has(lt.id)) {
+          void cloudSyncService.insertTimelineLog(user.id, lt);
+        }
+      }
+      const cloudRoutineIds = new Set(
+        cloudData.workoutRoutines.map((r) => r.id)
+      );
+      for (const lr of finalRoutines) {
+        if (!cloudRoutineIds.has(lr.id)) {
+          void cloudSyncService.upsertWorkoutRoutine(user.id, lr);
+        }
+      }
+      const cloudSessionIds = new Set(
+        cloudData.workoutSessions.map((s) => s.id)
+      );
+      for (const ls of finalSessions) {
+        if (!cloudSessionIds.has(ls.id)) {
+          void cloudSyncService.insertWorkoutSession(user.id, ls);
+        }
+      }
     }
 
     persistCurrentUserState(get());
@@ -414,7 +623,44 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
       exerciseCatalog: OPENGYM_EXERCISE_CATALOG,
       workoutRoutines: [],
       workoutSessions: [],
+      activeWorkoutDraft: null,
+      routineEditorDraft: null,
+      onboardingDraft: null,
+      deletedRecordIds: [],
     });
+  },
+
+  setActiveWorkoutDraft: (updater) => {
+    set((state) => {
+      const next =
+        typeof updater === 'function'
+          ? updater(state.activeWorkoutDraft)
+          : updater;
+      return { activeWorkoutDraft: next };
+    });
+    persistCurrentUserState(get());
+  },
+
+  setRoutineEditorDraft: (updater) => {
+    set((state) => {
+      const next =
+        typeof updater === 'function'
+          ? updater(state.routineEditorDraft)
+          : updater;
+      return { routineEditorDraft: next };
+    });
+    persistCurrentUserState(get());
+  },
+
+  setOnboardingDraft: (updater) => {
+    set((state) => {
+      const next =
+        typeof updater === 'function'
+          ? updater(state.onboardingDraft)
+          : updater;
+      return { onboardingDraft: next };
+    });
+    persistCurrentUserState(get());
   },
 
   completeOnboarding: (payload) => {
@@ -484,8 +730,9 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
       updatedAt: new Date().toISOString(),
     };
 
+    const existingTodayBio = state.biometricLogs.find((b) => b.date === today);
     const initialBioLog: BiometricLog = {
-      id: `bio-${today}`,
+      id: existingTodayBio?.id ?? generateUuid(),
       date: today,
       scaleWeightKg: payload.weightKg,
       trendWeightKg: payload.weightKg,
@@ -513,6 +760,7 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
       userProfile: newProfile,
       biometricLogs: updatedBioLogs,
       selectedDate: today,
+      onboardingDraft: null,
     });
 
     persistCurrentUserState(get());
@@ -641,8 +889,12 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
       hipCm,
     });
 
+    const existingForDate = state.biometricLogs.find(
+      (b) => b.date === targetDate
+    );
+
     const newEntry: BiometricLog = {
-      id: `bio-${targetDate}`,
+      id: existingForDate?.id ?? generateUuid(),
       date: targetDate,
       scaleWeightKg: payload.scaleWeightKg,
       trendWeightKg: payload.scaleWeightKg,
@@ -766,7 +1018,7 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
 
     const today = getTodayIso();
     const checkin: MetabolicCheckin = {
-      id: `checkin-${today}-${Date.now()}`,
+      id: generateUuid(),
       weekDate: today,
       avgDailyIntakeKcal: adaptiveStatus.avgDailyIntakeKcal,
       weightSlopeKgPerWeek: adaptiveStatus.weightSlopeKgPerWeek,
@@ -785,6 +1037,12 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
         metabolicCheckins: [checkin, ...state.metabolicCheckins],
       });
       persistCurrentUserState(get());
+      if (state.activeUserId) {
+        void cloudSyncService.insertMetabolicCheckin(
+          state.activeUserId,
+          checkin
+        );
+      }
       return checkin;
     }
 
@@ -838,6 +1096,7 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
     persistCurrentUserState(get());
 
     if (state.activeUserId) {
+      void cloudSyncService.insertMetabolicCheckin(state.activeUserId, checkin);
       void cloudSyncService.upsertUserProfile(
         state.activeUserId,
         updatedProfile
@@ -855,6 +1114,9 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
       metabolicCheckins: [],
       workoutRoutines: [],
       workoutSessions: [],
+      activeWorkoutDraft: null,
+      routineEditorDraft: null,
+      onboardingDraft: null,
     });
     persistCurrentUserState(get());
   },
@@ -880,11 +1142,12 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
       fiberG: 0,
     };
 
-    if (!overrideMacros && foodId) {
-      const food = state.foods.find((f) => f.id === foodId);
-      if (food) {
-        calculatedMacros = calculateFoodItemMacros(food, gramsConsumed);
-      }
+    const matchedFood = foodId
+      ? state.foods.find((f) => f.id === foodId)
+      : undefined;
+
+    if (!overrideMacros && matchedFood) {
+      calculatedMacros = calculateFoodItemMacros(matchedFood, gramsConsumed);
     } else if (!overrideMacros && recipeId) {
       const recipe = state.recipes.find((r) => r.id === recipeId);
       if (recipe) {
@@ -901,7 +1164,7 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
     }
 
     const newLog: TimelineLog = {
-      id: `tl-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      id: generateUuid(),
       date: targetDate,
       hour: Math.max(0, Math.min(23, hour)),
       foodId,
@@ -917,12 +1180,19 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
     persistCurrentUserState(get());
 
     if (state.activeUserId) {
-      void cloudSyncService.insertTimelineLog(state.activeUserId, newLog);
+      const uid = state.activeUserId;
+      void (async () => {
+        if (matchedFood?.isCustom) {
+          await cloudSyncService.upsertCustomFood(uid, matchedFood);
+        }
+        await cloudSyncService.insertTimelineLog(uid, newLog);
+      })();
     }
   },
 
   updateTimelineLogGrams: (logId, gramsConsumed) => {
     const state = get();
+    const safeGrams = Math.max(1, gramsConsumed);
     const updated = state.timelineLogs.map((log) => {
       if (log.id !== logId) return log;
       if (log.foodId) {
@@ -930,15 +1200,15 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
         if (food) {
           return {
             ...log,
-            gramsConsumed,
-            calculatedMacros: calculateFoodItemMacros(food, gramsConsumed),
+            gramsConsumed: safeGrams,
+            calculatedMacros: calculateFoodItemMacros(food, safeGrams),
           };
         }
       }
-      const ratio = gramsConsumed / Math.max(1, log.gramsConsumed);
+      const ratio = safeGrams / Math.max(1, log.gramsConsumed);
       return {
         ...log,
-        gramsConsumed,
+        gramsConsumed: safeGrams,
         calculatedMacros: {
           kcal: Math.round(log.calculatedMacros.kcal * ratio),
           proteinG: Number((log.calculatedMacros.proteinG * ratio).toFixed(1)),
@@ -950,12 +1220,21 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
     });
     set({ timelineLogs: updated });
     persistCurrentUserState(get());
+
+    if (state.activeUserId) {
+      void cloudSyncService.updateTimelineLogGrams(
+        state.activeUserId,
+        logId,
+        safeGrams
+      );
+    }
   },
 
   removeTimelineLog: (logId) => {
     const state = get();
     set({
       timelineLogs: state.timelineLogs.filter((l) => l.id !== logId),
+      deletedRecordIds: Array.from(new Set([...state.deletedRecordIds, logId])),
     });
     persistCurrentUserState(get());
     if (state.activeUserId) {
@@ -975,7 +1254,7 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
       for (const item of selectedLogs) {
         const cloned: TimelineLog = {
           ...item,
-          id: `tl-paste-${date}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+          id: generateUuid(),
           date,
         };
         clonedLogs.push(cloned);
@@ -992,15 +1271,21 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
   },
 
   addCustomFood: (foodData) => {
+    const state = get();
+    const providedId = (foodData as Partial<FoodItem>).id;
     const newFood: FoodItem = {
       ...foodData,
-      id: `food-custom-${Date.now()}`,
+      id: providedId || `food-custom-${Date.now()}`,
       isCustom: true,
     };
-    set((state) => ({
-      foods: [newFood, ...state.foods],
+    set((curr) => ({
+      foods: [newFood, ...curr.foods.filter((f) => f.id !== newFood.id)],
     }));
     persistCurrentUserState(get());
+
+    if (state.activeUserId) {
+      void cloudSyncService.upsertCustomFood(state.activeUserId, newFood);
+    }
     return newFood;
   },
 
@@ -1011,6 +1296,11 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
       ),
     }));
     persistCurrentUserState(get());
+    const state = get();
+    const updatedFood = state.foods.find((f) => f.id === foodId);
+    if (state.activeUserId && updatedFood?.isCustom) {
+      void cloudSyncService.upsertCustomFood(state.activeUserId, updatedFood);
+    }
   },
 
   addCustomRecipe: (recipeData) => {
@@ -1031,15 +1321,15 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
   saveWorkoutRoutine: (routine) => {
     set((state) => {
       const exists = state.workoutRoutines.some((r) => r.id === routine.id);
-      if (exists) {
-        return {
-          workoutRoutines: state.workoutRoutines.map((r) =>
-            r.id === routine.id ? routine : r
-          ),
-        };
-      }
+      const nextRoutines = exists
+        ? state.workoutRoutines.map((r) => (r.id === routine.id ? routine : r))
+        : [...state.workoutRoutines, routine];
       return {
-        workoutRoutines: [...state.workoutRoutines, routine],
+        workoutRoutines: nextRoutines,
+        routineEditorDraft: routine,
+        deletedRecordIds: state.deletedRecordIds.filter(
+          (id) => id !== routine.id
+        ),
       };
     });
     persistCurrentUserState(get());
@@ -1051,8 +1341,8 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
   },
 
   addExerciseToRoutine: (routineId, exerciseId) => {
-    set((state) => ({
-      workoutRoutines: state.workoutRoutines.map((r) => {
+    set((state) => {
+      const updatedRoutines = state.workoutRoutines.map((r) => {
         if (r.id !== routineId) return r;
         if (r.exercises.some((e) => e.exerciseId === exerciseId)) return r;
         return {
@@ -1063,15 +1353,24 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
               exerciseId,
               order: r.exercises.length + 1,
               targetSets: 3,
-              targetRepRange: [8, 12],
+              targetRepRange: [8, 12] as [number, number],
               targetRir: 1,
               restSeconds: 120,
-              progressionRule: 'double_progression',
+              progressionRule: 'double_progression' as const,
             },
           ],
         };
-      }),
-    }));
+      });
+      const updatedTarget =
+        updatedRoutines.find((r) => r.id === routineId) ?? null;
+      return {
+        workoutRoutines: updatedRoutines,
+        routineEditorDraft:
+          state.routineEditorDraft?.id === routineId && updatedTarget
+            ? updatedTarget
+            : state.routineEditorDraft,
+      };
+    });
     persistCurrentUserState(get());
 
     const state = get();
@@ -1083,8 +1382,20 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
 
   deleteWorkoutRoutine: (routineId) => {
     const state = get();
+    const remaining = state.workoutRoutines.filter((r) => r.id !== routineId);
     set({
-      workoutRoutines: state.workoutRoutines.filter((r) => r.id !== routineId),
+      workoutRoutines: remaining,
+      activeWorkoutDraft:
+        state.activeWorkoutDraft?.routineId === routineId
+          ? null
+          : state.activeWorkoutDraft,
+      routineEditorDraft:
+        state.routineEditorDraft?.id === routineId
+          ? remaining[0] ?? null
+          : state.routineEditorDraft,
+      deletedRecordIds: Array.from(
+        new Set([...state.deletedRecordIds, routineId])
+      ),
     });
     persistCurrentUserState(get());
     if (state.activeUserId) {
@@ -1142,6 +1453,7 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
 
     set({
       workoutSessions: [newSession, ...state.workoutSessions],
+      activeWorkoutDraft: null,
     });
     persistCurrentUserState(get());
 
@@ -1159,6 +1471,9 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
     const state = get();
     set({
       workoutSessions: state.workoutSessions.filter((s) => s.id !== sessionId),
+      deletedRecordIds: Array.from(
+        new Set([...state.deletedRecordIds, sessionId])
+      ),
     });
     persistCurrentUserState(get());
     if (state.activeUserId) {

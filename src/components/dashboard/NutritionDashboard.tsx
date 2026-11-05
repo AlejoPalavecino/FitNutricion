@@ -471,17 +471,17 @@ export const NutritionDashboard: React.FC = () => {
                     isCustom: true,
                     isFavorite: true,
                   };
-                  addCustomFood(newFood);
+                  const createdFood = addCustomFood(newFood);
                   const preview = calculateFoodItemMacros(
-                    newFood,
-                    newFood.defaultServingGrams
+                    createdFood,
+                    createdFood.defaultServingGrams
                   );
                   addTimelineLog({
                     date: selectedDate,
                     hour: activeHourToLog,
-                    foodId: newFood.id,
-                    customLabel: newFood.name,
-                    gramsConsumed: newFood.defaultServingGrams,
+                    foodId: createdFood.id,
+                    customLabel: createdFood.name,
+                    gramsConsumed: createdFood.defaultServingGrams,
                     overrideMacros: preview,
                   });
                   setCustomFoodName('');
@@ -622,13 +622,15 @@ export const NutritionDashboard: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => {
-                          if (!foodsMap[f.id]) addCustomFood(f);
+                          const savedFood = !foodsMap[f.id]
+                            ? addCustomFood(f)
+                            : f;
                           addTimelineLog({
                             date: selectedDate,
                             hour: activeHourToLog,
-                            foodId: f.id,
-                            customLabel: f.name,
-                            gramsConsumed: f.defaultServingGrams,
+                            foodId: savedFood.id,
+                            customLabel: savedFood.name,
+                            gramsConsumed: savedFood.defaultServingGrams,
                             overrideMacros: defaultPreview,
                           });
                         }}
@@ -641,12 +643,14 @@ export const NutritionDashboard: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => {
-                            if (!foodsMap[f.id]) addCustomFood(f);
+                            const savedFood = !foodsMap[f.id]
+                              ? addCustomFood(f)
+                              : f;
                             addTimelineLog({
                               date: selectedDate,
                               hour: activeHourToLog,
-                              foodId: f.id,
-                              customLabel: f.name,
+                              foodId: savedFood.id,
+                              customLabel: savedFood.name,
                               gramsConsumed: selectedFoodGrams,
                               overrideMacros: customPreview,
                             });

@@ -123,6 +123,14 @@ export const OpenGymHub: React.FC = () => {
   const workoutRoutines = useNutritionStore((s) => s.workoutRoutines);
   const workoutSessions = useNutritionStore((s) => s.workoutSessions);
   const selectedDate = useNutritionStore((s) => s.selectedDate);
+  const activeWorkoutDraft = useNutritionStore((s) => s.activeWorkoutDraft);
+  const routineEditorDraft = useNutritionStore((s) => s.routineEditorDraft);
+  const setActiveWorkoutDraft = useNutritionStore(
+    (s) => s.setActiveWorkoutDraft
+  );
+  const setRoutineEditorDraft = useNutritionStore(
+    (s) => s.setRoutineEditorDraft
+  );
   const saveWorkoutRoutine = useNutritionStore((s) => s.saveWorkoutRoutine);
   const addExerciseToRoutine = useNutritionStore((s) => s.addExerciseToRoutine);
   const deleteWorkoutRoutine = useNutritionStore((s) => s.deleteWorkoutRoutine);
@@ -139,11 +147,23 @@ export const OpenGymHub: React.FC = () => {
   );
 
   // ==========================================================================
-  // ESTADO 1: ENTRENAR HOY
+  // ESTADO 1: ENTRENAR HOY (100% PERSISTENTE ENTRE PESTAÑAS Y RECARGAS)
   // ==========================================================================
-  const [selectedRoutineId, setSelectedRoutineId] = useState<string>(
-    workoutRoutines[0]?.id ?? ''
-  );
+  const selectedRoutineId =
+    activeWorkoutDraft?.routineId || workoutRoutines[0]?.id || '';
+
+  const setSelectedRoutineId = (nextRoutineId: string) => {
+    setActiveWorkoutDraft((prev) => ({
+      routineId: nextRoutineId,
+      startedAtIso: prev?.startedAtIso ?? new Date().toISOString(),
+      setsByExercise:
+        prev?.routineId === nextRoutineId ? prev.setsByExercise : {},
+      restTimerEndsAtMs: prev?.restTimerEndsAtMs ?? null,
+      restTimerTotalSeconds: prev?.restTimerTotalSeconds ?? 120,
+      restTimerExerciseName: prev?.restTimerExerciseName ?? '',
+      updatedAt: new Date().toISOString(),
+    }));
+  };
 
   useEffect(() => {
     if (
@@ -151,10 +171,10 @@ export const OpenGymHub: React.FC = () => {
       !workoutRoutines.some((r) => r.id === selectedRoutineId)
     ) {
       setSelectedRoutineId(workoutRoutines[0].id);
-    } else if (workoutRoutines.length === 0 && selectedRoutineId !== '') {
-      setSelectedRoutineId('');
+    } else if (workoutRoutines.length === 0 && activeWorkoutDraft !== null) {
+      setActiveWorkoutDraft(null);
     }
-  }, [workoutRoutines, selectedRoutineId]);
+  }, [workoutRoutines, selectedRoutineId, activeWorkoutDraft]);
 
   const activeRoutine = useMemo(
     () =>
@@ -163,96 +183,185 @@ export const OpenGymHub: React.FC = () => {
     [workoutRoutines, selectedRoutineId]
   );
 
-  const [activeSetsByExercise, setActiveSetsByExercise] = useState<
-    Record<string, WorkoutSetLog[]>
-  >({});
+  const activeSetsByExercise = useMemo(
+    () => activeWorkoutDraft?.setsByExercise ?? {},
+    [activeWorkoutDraft?.setsByExercise]
+  );
+
+  const updateActiveSets = (
+    updater: (
+      prev: Record<string, WorkoutSetLog[]>
+    ) => Record<string, WorkoutSetLog[]>
+  ) => {
+    if (!activeRoutine) return;
+    setActiveWorkoutDraft((prev) => {
+      const currentSets =
+        prev?.routineId === activeRoutine.id ? prev.setsByExercise : {};
+      const nextSets = updater(currentSets);
+      return {
+        routineId: activeRoutine.id,
+        startedAtIso: prev?.startedAtIso ?? new Date().toISOString(),
+        setsByExercise: nextSets,
+        restTimerEndsAtMs: prev?.restTimerEndsAtMs ?? null,
+        restTimerTotalSeconds: prev?.restTimerTotalSeconds ?? 120,
+        restTimerExerciseName: prev?.restTimerExerciseName ?? '',
+        updatedAt: new Date().toISOString(),
+      };
+    });
+  };
+
   const [sessionSavedBanner, setSessionSavedBanner] = useState<string | null>(
     null
   );
-  const [sessionStartedAt] = useState<Date>(() => new Date());
   const [quickAddExerciseId, setQuickAddExerciseId] = useState<string>(
     exerciseCatalog[0]?.id ?? 'og-0025'
   );
 
   useEffect(() => {
-    if (!activeRoutine) {
-      setActiveSetsByExercise({});
-      return;
-    }
-    setActiveSetsByExercise((prev) => {
-      const nextMap: Record<string, WorkoutSetLog[]> = {};
+    if (!activeRoutine) return;
 
-      for (const rEx of activeRoutine.exercises) {
-        if (prev[rEx.exerciseId] && prev[rEx.exerciseId].length > 0) {
-          nextMap[rEx.exerciseId] = prev[rEx.exerciseId];
-          continue;
-        }
-        const catItem = catalogMap.get(rEx.exerciseId);
-        const progPlan = getDoubleProgressionSuggestion({
-          routineExercise: rEx,
-          catalogItem: catItem,
-          previousSessions: workoutSessions,
-        });
+    const currentSets =
+      activeWorkoutDraft?.routineId === activeRoutine.id
+        ? activeWorkoutDraft.setsByExercise
+        : {};
 
-        nextMap[rEx.exerciseId] = progPlan.setSuggestions.map((sug, idx) => ({
-          id: `live-${rEx.exerciseId}-${idx + 1}`,
-          exerciseId: rEx.exerciseId,
-          setNumber: idx + 1,
-          setType: 'working',
-          weightKg: sug.suggestedWeightKg,
-          reps: sug.suggestedReps,
-          rir: rEx.targetRir,
-          isCompleted: false,
-          isPrWeight: false,
-          isPr1RM: false,
-          estimated1RM: calculateEstimated1RM(
-            sug.suggestedWeightKg,
-            sug.suggestedReps,
-            'working'
-          ),
-        }));
+    let needsUpdate = activeWorkoutDraft?.routineId !== activeRoutine.id;
+    const nextMap: Record<string, WorkoutSetLog[]> = {};
+
+    for (const rEx of activeRoutine.exercises) {
+      const existingList = currentSets[rEx.exerciseId];
+      if (existingList && existingList.length > 0) {
+        nextMap[rEx.exerciseId] = existingList;
+        continue;
       }
+      needsUpdate = true;
+      const catItem = catalogMap.get(rEx.exerciseId);
+      const progPlan = getDoubleProgressionSuggestion({
+        routineExercise: rEx,
+        catalogItem: catItem,
+        previousSessions: workoutSessions,
+      });
 
-      return nextMap;
-    });
+      nextMap[rEx.exerciseId] = progPlan.setSuggestions.map((sug, idx) => ({
+        id: `live-${rEx.exerciseId}-${idx + 1}`,
+        exerciseId: rEx.exerciseId,
+        setNumber: idx + 1,
+        setType: 'working',
+        weightKg: sug.suggestedWeightKg,
+        reps: sug.suggestedReps,
+        rir: rEx.targetRir,
+        isCompleted: false,
+        isPrWeight: false,
+        isPr1RM: false,
+        estimated1RM: calculateEstimated1RM(
+          sug.suggestedWeightKg,
+          sug.suggestedReps,
+          'working'
+        ),
+      }));
+    }
+
+    if (
+      Object.keys(currentSets).length !== Object.keys(nextMap).length ||
+      needsUpdate
+    ) {
+      setActiveWorkoutDraft((prev) => ({
+        routineId: activeRoutine.id,
+        startedAtIso: prev?.startedAtIso ?? new Date().toISOString(),
+        setsByExercise: nextMap,
+        restTimerEndsAtMs: prev?.restTimerEndsAtMs ?? null,
+        restTimerTotalSeconds: prev?.restTimerTotalSeconds ?? 120,
+        restTimerExerciseName: prev?.restTimerExerciseName ?? '',
+        updatedAt: new Date().toISOString(),
+      }));
+    }
   }, [
     activeRoutine?.id,
-    activeRoutine?.exercises.length,
+    activeRoutine?.exercises,
     catalogMap,
     workoutSessions,
   ]);
 
-  // Temporizador de descanso
-  const [restTimerRemaining, setRestTimerRemaining] = useState<number>(0);
-  const [restTimerTotal, setRestTimerTotal] = useState<number>(120);
-  const [restTimerExerciseName, setRestTimerExerciseName] =
-    useState<string>('');
-  const [isRestTimerActive, setIsRestTimerActive] = useState<boolean>(false);
+  // Temporizador de descanso basado en timestamp real (no se pierde al cambiar de pestaña ni al bloquear el celular)
+  const restTimerEndsAtMs = activeWorkoutDraft?.restTimerEndsAtMs ?? null;
+  const restTimerTotal = activeWorkoutDraft?.restTimerTotalSeconds ?? 120;
+  const restTimerExerciseName =
+    activeWorkoutDraft?.restTimerExerciseName ?? '';
+
+  const [restTimerRemaining, setRestTimerRemaining] = useState<number>(() => {
+    if (!restTimerEndsAtMs) return 0;
+    return Math.max(0, Math.ceil((restTimerEndsAtMs - Date.now()) / 1000));
+  });
 
   useEffect(() => {
-    if (!isRestTimerActive || restTimerRemaining <= 0) return;
-    const timer = window.setInterval(() => {
-      setRestTimerRemaining((prev) => {
-        if (prev <= 1) {
-          setIsRestTimerActive(false);
-          playRestTimerBeep();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+    if (!restTimerEndsAtMs) {
+      setRestTimerRemaining(0);
+      return;
+    }
+
+    const updateRemaining = () => {
+      const diffSec = Math.max(
+        0,
+        Math.ceil((restTimerEndsAtMs - Date.now()) / 1000)
+      );
+      setRestTimerRemaining(diffSec);
+      if (diffSec <= 0) {
+        playRestTimerBeep();
+        setActiveWorkoutDraft((prev) =>
+          prev ? { ...prev, restTimerEndsAtMs: null } : null
+        );
+      }
+    };
+
+    updateRemaining();
+    const timer = window.setInterval(updateRemaining, 500);
     return () => window.clearInterval(timer);
-  }, [isRestTimerActive, restTimerRemaining]);
+  }, [restTimerEndsAtMs]);
 
   const startRestTimer = (seconds: number, exName: string) => {
-    setRestTimerTotal(seconds);
+    const endsAt = Date.now() + seconds * 1000;
     setRestTimerRemaining(seconds);
-    setRestTimerExerciseName(exName);
-    setIsRestTimerActive(true);
+    setActiveWorkoutDraft((prev) =>
+      prev
+        ? {
+            ...prev,
+            restTimerEndsAtMs: endsAt,
+            restTimerTotalSeconds: seconds,
+            restTimerExerciseName: exName,
+            updatedAt: new Date().toISOString(),
+          }
+        : null
+    );
   };
 
+  const adjustRestTimer = (deltaSeconds: number) => {
+    setActiveWorkoutDraft((prev) => {
+      if (!prev || !prev.restTimerEndsAtMs) return prev;
+      const nextEndsAt = prev.restTimerEndsAtMs + deltaSeconds * 1000;
+      if (nextEndsAt <= Date.now()) {
+        return { ...prev, restTimerEndsAtMs: null };
+      }
+      return {
+        ...prev,
+        restTimerEndsAtMs: nextEndsAt,
+        updatedAt: new Date().toISOString(),
+      };
+    });
+  };
+
+  const stopRestTimer = () => {
+    setRestTimerRemaining(0);
+    setActiveWorkoutDraft((prev) =>
+      prev ? { ...prev, restTimerEndsAtMs: null } : null
+    );
+  };
+
+  const isRestTimerActive = Boolean(
+    restTimerEndsAtMs && restTimerRemaining > 0
+  );
+
   const handleCycleSetType = (exerciseId: string, setId: string) => {
-    setActiveSetsByExercise((prev) => {
+    updateActiveSets((prev) => {
       const list = prev[exerciseId] ?? [];
       return {
         ...prev,
@@ -280,7 +389,7 @@ export const OpenGymHub: React.FC = () => {
     field: 'weightKg' | 'reps',
     value: number
   ) => {
-    setActiveSetsByExercise((prev) => {
+    updateActiveSets((prev) => {
       const list = prev[exerciseId] ?? [];
       return {
         ...prev,
@@ -320,7 +429,8 @@ export const OpenGymHub: React.FC = () => {
     restSeconds: number,
     exNameEs: string
   ) => {
-    setActiveSetsByExercise((prev) => {
+    let shouldStartRest = false;
+    updateActiveSets((prev) => {
       const list = prev[exerciseId] ?? [];
       return {
         ...prev,
@@ -344,7 +454,7 @@ export const OpenGymHub: React.FC = () => {
             est1RM > bestHist.max1RMKg;
 
           if (nextCompleted) {
-            startRestTimer(restSeconds, exNameEs);
+            shouldStartRest = true;
           }
 
           return {
@@ -357,10 +467,14 @@ export const OpenGymHub: React.FC = () => {
         }),
       };
     });
+
+    if (shouldStartRest) {
+      startRestTimer(restSeconds, exNameEs);
+    }
   };
 
   const handleAddSetToExercise = (exerciseId: string) => {
-    setActiveSetsByExercise((prev) => {
+    updateActiveSets((prev) => {
       const list = prev[exerciseId] ?? [];
       const last = list[list.length - 1];
       const newSetNumber = list.length + 1;
@@ -406,14 +520,17 @@ export const OpenGymHub: React.FC = () => {
     if (completed.length === 0) return;
 
     const now = new Date();
+    const startedDate = activeWorkoutDraft?.startedAtIso
+      ? new Date(activeWorkoutDraft.startedAtIso)
+      : now;
     const pad = (n: number) => String(n).padStart(2, '0');
-    const startTimeStr = `${pad(sessionStartedAt.getHours())}:${pad(
-      sessionStartedAt.getMinutes()
+    const startTimeStr = `${pad(startedDate.getHours())}:${pad(
+      startedDate.getMinutes()
     )}`;
     const endTimeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
     const elapsedMin = Math.max(
       15,
-      Math.round((now.getTime() - sessionStartedAt.getTime()) / 60000) || 45
+      Math.round((now.getTime() - startedDate.getTime()) / 60000) || 45
     );
 
     const saved = logWorkoutSession({
@@ -425,9 +542,6 @@ export const OpenGymHub: React.FC = () => {
       durationMinutes: elapsedMin,
       sets: completed,
     });
-
-    // Reiniciar el estado de completado de la vista en vivo tras guardar
-    setActiveSetsByExercise({});
 
     setSessionSavedBanner(
       `¡Entrenamiento guardado! Completaste ${completed.length} series hoy (${saved.totalVolumeKg.toLocaleString()} kg movidos en total).`
@@ -484,11 +598,27 @@ export const OpenGymHub: React.FC = () => {
   ]);
 
   // ==========================================================================
-  // ESTADO 3: MIS RUTINAS
+  // ESTADO 3: MIS RUTINAS (BORRADOR Y CAMBIOS PERSISTENTES)
   // ==========================================================================
-  const [editingRoutine, setEditingRoutine] = useState<WorkoutRoutine>(() =>
-    workoutRoutines[0] ?? createEmptyRoutineDraft()
+  const editingRoutine = useMemo(
+    () =>
+      routineEditorDraft ?? workoutRoutines[0] ?? createEmptyRoutineDraft(),
+    [routineEditorDraft, workoutRoutines]
   );
+
+  const setEditingRoutine = (nextRoutine: WorkoutRoutine) => {
+    setRoutineEditorDraft(nextRoutine);
+    // Si la rutina ya existe en workoutRoutines y tiene nombre válido, auto-guardar cambios
+    if (
+      nextRoutine.name.trim() &&
+      workoutRoutines.some((r) => r.id === nextRoutine.id)
+    ) {
+      saveWorkoutRoutine({
+        ...nextRoutine,
+        name: nextRoutine.name.trim(),
+      });
+    }
+  };
   const [routineExerciseFilter, setRoutineExerciseFilter] = useState('');
   const [exerciseToAddId, setExerciseToAddId] = useState<string>(
     exerciseCatalog[0]?.id ?? 'og-0025'
@@ -2128,26 +2258,21 @@ export const OpenGymHub: React.FC = () => {
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() =>
-                    setRestTimerRemaining((prev) => Math.max(0, prev - 15))
-                  }
+                  onClick={() => adjustRestTimer(-15)}
                   className="rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-200"
                 >
                   -15s
                 </button>
                 <button
                   type="button"
-                  onClick={() => setRestTimerRemaining((prev) => prev + 15)}
+                  onClick={() => adjustRestTimer(15)}
                   className="rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-200"
                 >
                   +15s
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    setIsRestTimerActive(false);
-                    setRestTimerRemaining(0);
-                  }}
+                  onClick={stopRestTimer}
                   className="inline-flex items-center gap-1 rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-emerald-500"
                 >
                   <SkipForward className="h-3.5 w-3.5" />

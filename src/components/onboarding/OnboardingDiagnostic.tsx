@@ -84,57 +84,120 @@ export const OnboardingDiagnostic: React.FC<OnboardingDiagnosticProps> = ({
   const currentUser = useAuthStore((s) => s.currentUser);
   const existingProfile = useNutritionStore((s) => s.userProfile);
   const biometricLogs = useNutritionStore((s) => s.biometricLogs);
+  const onboardingDraft = useNutritionStore((s) => s.onboardingDraft);
+  const setOnboardingDraft = useNutritionStore((s) => s.setOnboardingDraft);
   const completeOnboarding = useNutritionStore((s) => s.completeOnboarding);
 
   const latestBio = biometricLogs[biometricLogs.length - 1];
 
   const [name, setName] = useState(
-    existingProfile?.name || currentUser?.fullName || ''
+    onboardingDraft?.name ||
+      existingProfile?.name ||
+      currentUser?.fullName ||
+      ''
   );
   const [sex, setSex] = useState<BiologicalSex>(
-    existingProfile?.sex ?? 'male'
+    onboardingDraft?.sex ?? existingProfile?.sex ?? 'male'
   );
   const [birthDate, setBirthDate] = useState(
-    existingProfile?.birthDate ?? ''
+    onboardingDraft?.birthDate || existingProfile?.birthDate || ''
   );
   const [heightInput, setHeightInput] = useState<string>(
-    existingProfile?.heightCm ? String(existingProfile.heightCm) : ''
+    onboardingDraft?.heightCm
+      ? String(onboardingDraft.heightCm)
+      : existingProfile?.heightCm
+        ? String(existingProfile.heightCm)
+        : ''
   );
   const [weightInput, setWeightInput] = useState<string>(
-    latestBio?.scaleWeightKg ? String(latestBio.scaleWeightKg) : ''
+    onboardingDraft?.weightKg
+      ? String(onboardingDraft.weightKg)
+      : latestBio?.scaleWeightKg
+        ? String(latestBio.scaleWeightKg)
+        : ''
   );
-  const [pal, setPal] = useState<number>(existingProfile?.initialPal ?? 1.55);
+  const [pal, setPal] = useState<number>(
+    onboardingDraft?.pal ?? existingProfile?.initialPal ?? 1.55
+  );
   const [trainingExperience, setTrainingExperience] =
     useState<TrainingExperience>(
-      existingProfile?.trainingExperience ?? 'novice'
+      onboardingDraft?.experience ??
+        existingProfile?.trainingExperience ??
+        'novice'
     );
 
   // Cinta métrica opcional (colapsada por defecto)
   const [useTapeMeasurements, setUseTapeMeasurements] = useState<boolean>(
-    latestBio ? latestBio.bfMethod === 'us_navy' : false
+    Boolean(onboardingDraft?.neckCm || onboardingDraft?.waistCm) ||
+      (latestBio ? latestBio.bfMethod === 'us_navy' : false)
   );
   const [neckInput, setNeckInput] = useState<string>(
-    latestBio?.neckCm ? String(latestBio.neckCm) : ''
+    onboardingDraft?.neckCm
+      ? String(onboardingDraft.neckCm)
+      : latestBio?.neckCm
+        ? String(latestBio.neckCm)
+        : ''
   );
   const [waistInput, setWaistInput] = useState<string>(
-    latestBio?.waistCm ? String(latestBio.waistCm) : ''
+    onboardingDraft?.waistCm
+      ? String(onboardingDraft.waistCm)
+      : latestBio?.waistCm
+        ? String(latestBio.waistCm)
+        : ''
   );
   const [hipInput, setHipInput] = useState<string>(
-    latestBio?.hipCm ? String(latestBio.hipCm) : ''
+    onboardingDraft?.hipCm
+      ? String(onboardingDraft.hipCm)
+      : latestBio?.hipCm
+        ? String(latestBio.hipCm)
+        : ''
   );
 
   const [userSelectedPhase, setUserSelectedPhase] =
-    useState<NutritionalPhase | null>(existingProfile?.currentPhase ?? null);
+    useState<NutritionalPhase | null>(
+      onboardingDraft?.selectedPhase ?? existingProfile?.currentPhase ?? null
+    );
   const [validationError, setValidationError] = useState<string | null>(null);
 
   // Sincronizar automáticamente el nombre registrado de la cuenta o del perfil guardado
   useEffect(() => {
     if (existingProfile?.name) {
-      setName(existingProfile.name);
+      setName((prev) => (prev.trim() ? prev : existingProfile.name!));
     } else if (currentUser?.fullName) {
       setName((prev) => (prev.trim() ? prev : currentUser.fullName));
     }
   }, [existingProfile?.name, currentUser?.fullName]);
+
+  // Persistir automáticamente el borrador de onboarding ante cualquier cambio
+  useEffect(() => {
+    setOnboardingDraft({
+      step: 1,
+      name,
+      sex,
+      birthDate,
+      heightCm: heightInput ? Number(heightInput) : '',
+      weightKg: weightInput ? Number(weightInput) : '',
+      pal,
+      experience: trainingExperience,
+      neckCm: neckInput ? Number(neckInput) : '',
+      waistCm: waistInput ? Number(waistInput) : '',
+      hipCm: hipInput ? Number(hipInput) : '',
+      selectedPhase: userSelectedPhase,
+    });
+  }, [
+    name,
+    sex,
+    birthDate,
+    heightInput,
+    weightInput,
+    pal,
+    trainingExperience,
+    neckInput,
+    waistInput,
+    hipInput,
+    userSelectedPhase,
+    setOnboardingDraft,
+  ]);
 
   const heightCm = Number(heightInput);
   const weightKg = Number(weightInput);
