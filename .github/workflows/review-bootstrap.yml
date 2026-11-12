@@ -1,7 +1,7 @@
 name: Remediation baseline
 on:
   push:
-    branches: ['improvements/stage-1-integrity-privacy']
+    branches: ['improvements/stage-2-reliable-sync']
     paths: ['.github/workflows/review-bootstrap.yml']
 permissions:
   contents: read
