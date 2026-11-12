@@ -1,3 +1,4 @@
+import { localDate, addDays, weekStart, isCivilDate } from '../lib/dates';
 import { reportLocalFailure, useSyncStatusStore } from './useSyncStatusStore';
 import { create } from 'zustand';
 import type {
@@ -113,6 +114,7 @@ export interface PersistedUserSnapshot {
   routineEditorDraft: WorkoutRoutine | null;
   onboardingDraft: OnboardingDraft | null;
   deletedRecordIds: string[];
+  completedNutritionDates: string[];
 }
 
 export interface NutritionState {
@@ -136,6 +138,7 @@ export interface NutritionState {
   routineEditorDraft: WorkoutRoutine | null;
   onboardingDraft: OnboardingDraft | null;
   deletedRecordIds: string[];
+  completedNutritionDates: string[];
 
   // Inicialización y aislamiento por cuenta de usuario
   initializeForUser: (
@@ -180,6 +183,7 @@ export interface NutritionState {
 
   // Acciones Fase 3 & 4 (Timeline Logger, Multi-Paste, Alimentos y Recetas)
   setSelectedDate: (date: string) => void;
+  markNutritionDayComplete: (date: string, complete: boolean) => void;
   addTimelineLog: (entry: {
     date?: string;
     hour: number;
@@ -217,7 +221,7 @@ export interface NutritionState {
 
 let sessionGeneration = 0;
 
-const getTodayIso = () => new Date().toISOString().slice(0, 10);
+const getTodayIso = localDate;
 
 const LEGACY_STORAGE_KEYS = [
   'fitnutricion-offline-v1',
@@ -314,6 +318,7 @@ function sanitizeSnapshot(
     routineEditorDraft: raw?.routineEditorDraft ?? null,
     onboardingDraft: raw?.onboardingDraft ?? null,
     deletedRecordIds: Array.from(deletedSet),
+    completedNutritionDates: Array.isArray(raw?.completedNutritionDates) ? raw.completedNutritionDates.filter(isCivilDate) : [],
   };
 }
 
@@ -339,6 +344,7 @@ function snapshotFromState(state: NutritionState): PersistedUserSnapshot {
     routineEditorDraft: state.routineEditorDraft,
     onboardingDraft: state.onboardingDraft,
     deletedRecordIds: state.deletedRecordIds,
+    completedNutritionDates: state.completedNutritionDates,
   };
 
   return snapshot;
@@ -369,6 +375,7 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
   routineEditorDraft: null,
   onboardingDraft: null,
   deletedRecordIds: [],
+  completedNutritionDates: [],
 
   initializeForUser: async (user, options) => {
     const generation = ++sessionGeneration;
@@ -396,6 +403,7 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
         routineEditorDraft: null,
         onboardingDraft: null,
         deletedRecordIds: [],
+  completedNutritionDates: [],
       });
     }
 
@@ -444,6 +452,7 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
       routineEditorDraft: localSnapshot.routineEditorDraft,
       onboardingDraft: localSnapshot.onboardingDraft,
       deletedRecordIds: localSnapshot.deletedRecordIds,
+      completedNutritionDates: localSnapshot.completedNutritionDates,
     });
 
     await cloudSyncService.connect(user, snapshotFromState(get()), (remote) => {
@@ -456,7 +465,7 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
         exerciseCatalog: [...remote.customExercises, ...OPENGYM_EXERCISE_CATALOG],
         timelineLogs: remote.timelineLogs, metabolicCheckins: remote.metabolicCheckins,
         workoutRoutines: remote.workoutRoutines, workoutSessions: remote.workoutSessions,
-        deletedRecordIds: remote.deletedRecordIds });
+        deletedRecordIds: remote.deletedRecordIds, completedNutritionDates: remote.completedNutritionDates ?? [] });
       persistCurrentUserState(get(), false);
     });
     if (generation === sessionGeneration) persistCurrentUserState(get(), false);
@@ -483,6 +492,7 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
       routineEditorDraft: null,
       onboardingDraft: null,
       deletedRecordIds: [],
+  completedNutritionDates: [],
     });
   },
 
@@ -522,6 +532,7 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
   completeOnboarding: (payload) => {
     const state = get();
     const age = calculateAgeFromBirthDate(payload.birthDate);
+    if (age < 18 || age > 100) throw new RangeError('El plan automático está limitado a personas adultas.');
     const alpha = payload.ewmaAlpha ?? 0.12;
 
     const diag = evaluateAnthropometrics({
@@ -575,7 +586,8 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
       activeTdee: diag.initialStaticTdee,
       bmrKcal: diag.bmrKcal,
       bmrFormulaUsed: diag.bmrFormula,
-      targetKcal: phaseCal.targetKcal,
+      targetKcal: macros.kcal,
+      targetAdjustmentReason: macros.energyAdjustmentReason ?? undefined,
       targetProteinG: macros.proteinG,
       targetCarbsG: macros.carbsG,
       targetFatG: macros.fatG,
@@ -663,7 +675,8 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
       ...profile,
       currentPhase: phase,
       phaseAdjustmentPercent: phaseCal.appliedAdjustmentPercent,
-      targetKcal: phaseCal.targetKcal,
+      targetKcal: macros.kcal,
+      targetAdjustmentReason: macros.energyAdjustmentReason ?? undefined,
       targetProteinG: macros.proteinG,
       targetCarbsG: macros.carbsG,
       targetFatG: macros.fatG,
@@ -706,6 +719,7 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
     if (!profile) return;
 
     const targetDate = payload.date || getTodayIso();
+    if (!isCivilDate(targetDate) || targetDate > getTodayIso() || !Number.isFinite(payload.scaleWeightKg) || payload.scaleWeightKg < 30 || payload.scaleWeightKg > 250) throw new RangeError('Pesaje inválido.');
     const age = calculateAgeFromBirthDate(profile.birthDate, targetDate);
 
     const sortedExisting = [...state.biometricLogs].sort((a, b) =>
@@ -777,7 +791,8 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
       ...profile,
       bmrKcal: diag.bmrKcal,
       bmrFormulaUsed: diag.bmrFormula,
-      targetKcal: phaseCal.targetKcal,
+      targetKcal: macros.kcal,
+      targetAdjustmentReason: macros.energyAdjustmentReason ?? undefined,
       targetProteinG: macros.proteinG,
       targetCarbsG: macros.carbsG,
       targetFatG: macros.fatG,
@@ -803,21 +818,8 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
     const sortedBio = [...state.biometricLogs].sort((a, b) =>
       a.date.localeCompare(b.date)
     );
-    const allKnownDates = [
-      ...sortedBio.map((b) => b.date),
-      ...state.timelineLogs.map((l) => l.date),
-    ].sort((a, b) => a.localeCompare(b));
-
-    const anchorDateStr =
-      allKnownDates[allKnownDates.length - 1] || getTodayIso();
-    const anchorDate = new Date(`${anchorDateStr}T12:00:00Z`);
-
-    const recentDates: string[] = [];
-    for (let i = 20; i >= 0; i--) {
-      const d = new Date(anchorDate);
-      d.setUTCDate(d.getUTCDate() - i);
-      recentDates.push(d.toISOString().slice(0, 10));
-    }
+    const anchorDateStr = getTodayIso();
+    const recentDates = Array.from({length:21},(_,i)=>addDays(anchorDateStr,i-20));
 
     const dailyIntakes = recentDates.map((date) => {
       const logsForDay = state.timelineLogs.filter((l) => l.date === date);
@@ -828,7 +830,7 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
         (sum, item) => sum + item.calculatedMacros.kcal,
         0
       );
-      return { date, kcal: totalKcal > 0 ? totalKcal : null };
+      return { date, kcal: totalKcal > 0 ? totalKcal : null, isComplete: state.completedNutritionDates.includes(date) };
     });
 
     return calculateAdaptiveTdee({
@@ -836,6 +838,7 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
       biometricLogs: sortedBio,
       previousTdee: profile.activeTdee,
       windowDays: 21,
+      referenceDate: anchorDateStr,
     });
   },
 
@@ -845,12 +848,15 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
     if (!profile) return null;
 
     const adaptiveStatus = get().computeCurrentAdaptiveTdeeStatus();
-    if (!adaptiveStatus) return null;
+    if (!adaptiveStatus?.isReadyForAdaptive) return null;
 
     const today = getTodayIso();
+    const period = weekStart(today);
+    const existing = state.metabolicCheckins.find(c => weekStart(c.weekDate) === period);
+    if (existing) return existing;
     const checkin: MetabolicCheckin = {
-      id: generateUuid(),
-      weekDate: today,
+      id: `checkin-${period}`,
+      weekDate: period,
       avgDailyIntakeKcal: adaptiveStatus.avgDailyIntakeKcal,
       weightSlopeKgPerWeek: adaptiveStatus.weightSlopeKgPerWeek,
       calculatedRealTdee: adaptiveStatus.calculatedRealTdee,
@@ -906,7 +912,8 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
     const updatedProfile: UserProfile = {
       ...profile,
       activeTdee: newActiveTdee,
-      targetKcal: phaseCal.targetKcal,
+      targetKcal: macros.kcal,
+      targetAdjustmentReason: macros.energyAdjustmentReason ?? undefined,
       targetProteinG: macros.proteinG,
       targetCarbsG: macros.carbsG,
       targetFatG: macros.fatG,
@@ -941,7 +948,13 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
     persistCurrentUserState(get());
   },
 
-  setSelectedDate: (date) => set({ selectedDate: date }),
+  setSelectedDate: (date) => { if (isCivilDate(date)) set({ selectedDate: date }); },
+  markNutritionDayComplete: (date, complete) => {
+    const state=get();
+    if (!isCivilDate(date)||date>getTodayIso()||!state.timelineLogs.some(l=>l.date===date)) return;
+    set({completedNutritionDates: complete ? Array.from(new Set([...state.completedNutritionDates,date])) : state.completedNutritionDates.filter(d=>d!==date)});
+    persistCurrentUserState(get());
+  },
 
   addTimelineLog: ({
     date,
@@ -996,6 +1009,7 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
 
     set({
       timelineLogs: [...state.timelineLogs, newLog],
+      completedNutritionDates: state.completedNutritionDates.filter(d=>d!==targetDate),
     });
     persistCurrentUserState(get());
 
@@ -1030,7 +1044,7 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
         },
       };
     });
-    set({ timelineLogs: updated });
+    set({ timelineLogs: updated, completedNutritionDates: state.completedNutritionDates.filter(d=>d!==state.timelineLogs.find(l=>l.id===logId)?.date) });
     persistCurrentUserState(get());
 
 
@@ -1040,6 +1054,7 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
     const state = get();
     set({
       timelineLogs: state.timelineLogs.filter((l) => l.id !== logId),
+      completedNutritionDates: state.completedNutritionDates.filter(d=>d!==state.timelineLogs.find(l=>l.id===logId)?.date),
       deletedRecordIds: Array.from(new Set([...state.deletedRecordIds, logId])),
     });
     persistCurrentUserState(get());
@@ -1068,6 +1083,7 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
 
     set({
       timelineLogs: [...state.timelineLogs, ...clonedLogs],
+      completedNutritionDates: state.completedNutritionDates.filter(d=>!targetDates.includes(d)),
     });
     persistCurrentUserState(get());
   },

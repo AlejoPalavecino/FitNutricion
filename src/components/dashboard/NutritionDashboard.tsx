@@ -1,3 +1,4 @@
+import { localDate } from '../../lib/dates';
 import React, { useMemo, useState } from 'react';
 import {
   Calendar,
@@ -35,6 +36,8 @@ function getHourFriendlyLabel(hour: number): string {
 }
 
 export const NutritionDashboard: React.FC = () => {
+  const completedDates = useNutritionStore(s=>s.completedNutritionDates);
+  const markComplete = useNutritionStore(s=>s.markNutritionDayComplete);
   const userProfile = useNutritionStore((s) => s.userProfile);
   const foods = useNutritionStore((s) => s.foods);
   const recipes = useNutritionStore((s) => s.recipes);
@@ -59,7 +62,7 @@ export const NutritionDashboard: React.FC = () => {
   const [targetPasteDate, setTargetPasteDate] = useState<string>(() => {
     const d = new Date();
     d.setDate(d.getDate() + 1);
-    return d.toISOString().slice(0, 10);
+    return localDate(d);
   });
   const [pasteFeedback, setPasteFeedback] = useState<string | null>(null);
 
@@ -233,6 +236,10 @@ export const NutritionDashboard: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 px-4 py-8 sm:px-6">
+      <div className="rounded-xl border bg-white p-3 text-sm" role="status">
+        <span>{completedDates.includes(selectedDate) ? 'Día confirmado completo para el cálculo adaptativo.' : 'Registro parcial: no se usará como día completo en el cálculo adaptativo.'}</span>
+        <button type="button" className="ml-3 underline" disabled={selectedDate > localDate() || dayLogs.length === 0} onClick={() => markComplete(selectedDate, !completedDates.includes(selectedDate))}>{completedDates.includes(selectedDate) ? 'Marcar como parcial' : 'Confirmar que registré todo el día'}</button>
+      </div>
       {/* ====================================================================
           RESUMEN SIMPLE DEL DÍA
          ==================================================================== */}

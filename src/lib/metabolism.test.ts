@@ -173,6 +173,7 @@ describe('Motor Metabólico & Antropométrico (src/lib/metabolism.ts)', () => {
     // y pierde 0.05 kg/día de peso en tendencia (-0.35 kg/semana) -> TDEE Real = 2400 - (-0.05 * 7700) = 2785 kcal
     const dailyIntakes = Array.from({ length: 21 }, (_, idx) => ({
       date: `2026-10-${String(idx + 1).padStart(2, '0')}`,
+      isComplete: idx % 7 !== 0,
       kcal: idx % 7 === 0 ? null : 2400, // 3 días vacíos imputados a 2400 kcal
     }));
 
@@ -192,6 +193,7 @@ describe('Motor Metabólico & Antropométrico (src/lib/metabolism.ts)', () => {
       dailyIntakes,
       biometricLogs,
       previousTdee: 2500,
+      referenceDate: '2026-10-21',
     });
 
     expect(adaptive.isReadyForAdaptive).toBe(true);

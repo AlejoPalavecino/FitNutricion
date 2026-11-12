@@ -27,7 +27,7 @@ export function calculateEstimated1RM(
   reps: number,
   setType: WorkoutSetType = 'working'
 ): number {
-  if (setType === 'warmup' || weightKg <= 0 || reps <= 0) {
+  if (setType === 'warmup' || !Number.isFinite(weightKg) || !Number.isFinite(reps) || weightKg <= 0 || reps <= 0) {
     return 0;
   }
 
@@ -208,7 +208,7 @@ export function getDoubleProgressionSuggestion(params: {
 
   // Verificar si TODAS las series de trabajo alcanzaron o superaron el límite superior del targetRepRange
   const allWorkingSetsHitTopOfRange =
-    referenceSets.length > 0 && referenceSets.every((s) => s.reps >= maxReps);
+    lastWorkingSets.length >= targetSets && lastWorkingSets.every((s) => s.reps >= maxReps && Number.isFinite(s.weightKg) && s.weightKg > 0);
 
   const topWorkingWeight =
     referenceSets.length > 0
