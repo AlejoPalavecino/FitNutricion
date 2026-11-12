@@ -1,3 +1,4 @@
+import { generateUuid } from '../../lib/ids';
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -243,7 +244,7 @@ export const OpenGymHub: React.FC = () => {
       });
 
       nextMap[rEx.exerciseId] = progPlan.setSuggestions.map((sug, idx) => ({
-        id: `live-${rEx.exerciseId}-${idx + 1}`,
+        id: generateUuid(),
         exerciseId: rEx.exerciseId,
         setNumber: idx + 1,
         setType: 'working',
@@ -481,7 +482,7 @@ export const OpenGymHub: React.FC = () => {
       const weightKg = last?.weightKg ?? 0;
       const reps = last?.reps ?? 10;
       const newSet: WorkoutSetLog = {
-        id: `live-${exerciseId}-${Date.now()}`,
+        id: generateUuid(),
         exerciseId,
         setNumber: newSetNumber,
         setType: 'working',

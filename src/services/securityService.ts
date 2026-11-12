@@ -1,4 +1,4 @@
-import { clear as clearIdb } from 'idb-keyval';
+import { del } from 'idb-keyval';
 
 /**
  * Servicio de seguridad de la aplicación:
@@ -101,36 +101,22 @@ export function mapSafeAuthError(error: unknown): string {
  * Borra de forma segura los datos sensibles almacenados localmente en el dispositivo
  * cuando el usuario cierra su sesión (evita exponer peso, medidas o comidas en equipos compartidos).
  */
-export async function clearSensitiveUserStorage(): Promise<void> {
-  const sensitiveKeys = [
+export async function clearSensitiveUserStorage(userId: string): Promise<void> {
+  if (!userId) throw new Error('Se requiere el usuario a eliminar del dispositivo.');
+  const keys = [
+    `fitnutricion-user-data-v2:${userId}`,
+    `fitnutricion-user-data-v3:${userId}`,
+    `fitnutricion-sync-v1:${userId}`,
     'fitnutricion-offline-v1',
     'fitnutricion-offline-store-v2',
-    'fitnutricion-local-session-v1',
   ];
-
-  try {
-    if (typeof localStorage !== 'undefined') {
-      for (const key of sensitiveKeys) {
-        localStorage.removeItem(key);
-      }
-    }
-  } catch {
-    // Ignorar restricciones del navegador
+  let failed = false;
+  // Attempt both stores independently: failure in one must not skip the other.
+  for (const key of keys) {
+    try { if (typeof localStorage !== 'undefined') localStorage.removeItem(key); }
+    catch { failed = true; }
+    try { if (typeof indexedDB !== 'undefined') await del(key); }
+    catch { failed = true; }
   }
-
-  try {
-    if (typeof sessionStorage !== 'undefined') {
-      sessionStorage.clear();
-    }
-  } catch {
-    // Ignorar restricciones del navegador
-  }
-
-  try {
-    if (typeof indexedDB !== 'undefined') {
-      await clearIdb();
-    }
-  } catch {
-    // Ignorar si IndexedDB no está disponible
-  }
+  if (failed) throw new Error('No se pudieron borrar todas las copias locales. Reintenta antes de salir.');
 }

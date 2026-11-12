@@ -1,3 +1,4 @@
+import { SyncStatusBanner } from './components/navigation/SyncStatusBanner';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
@@ -434,6 +435,7 @@ export function App() {
         )}
       </header>
 
+      <SyncStatusBanner />
       {/* Contenido Principal */}
       <main className="pb-24">
         {activeTab === 'onboarding' && (

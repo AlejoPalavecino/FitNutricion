@@ -1,3 +1,4 @@
+import { createLocalCredential, verifyLocalCredential, verifyLegacyCredential, type LocalCredential } from './localCredentials';
 import { supabase } from './supabaseClient';
 import {
   clearSensitiveUserStorage,
@@ -26,52 +27,28 @@ interface LocalVaultUserRecord {
   id: string;
   email: string;
   fullName: string;
-  passwordHashHex: string;
+  passwordHashHex?: string;
+  credential?: LocalCredential;
   createdAt: string;
 }
 
 const LOCAL_VAULT_ACCOUNTS_KEY = 'fitnutricion-vault-accounts-v1';
 const LOCAL_ACTIVE_SESSION_KEY = 'fitnutricion-local-session-v1';
 
-/**
- * Genera un hash SHA-256 irreversible usando la API nativa Web Crypto
- * para que nunca se almacene una contraseña en texto plano en modo local.
- */
-async function hashPasswordSha256(email: string, password: string): Promise<string> {
-  const payload = `${sanitizeEmail(email)}::fitnutricion-salt-v1::${password}`;
-  if (typeof crypto !== 'undefined' && crypto.subtle) {
-    const encoded = new TextEncoder().encode(payload);
-    const buffer = await crypto.subtle.digest('SHA-256', encoded);
-    return Array.from(new Uint8Array(buffer))
-      .map((b) => b.toString(16).padStart(2, '0'))
-      .join('');
-  }
-  // Fallback determinista para entornos de test sin Web Crypto
-  let hash = 0;
-  for (let i = 0; i < payload.length; i += 1) {
-    hash = (hash << 5) - hash + payload.charCodeAt(i);
-    hash |= 0;
-  }
-  return `fallback-${Math.abs(hash)}`;
-}
-
 function readLocalAccounts(): LocalVaultUserRecord[] {
   try {
     const raw = localStorage.getItem(LOCAL_VAULT_ACCOUNTS_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    return Array.isArray(parsed) ? parsed.filter((entry) => entry && typeof entry.id === 'string' && typeof entry.email === 'string' && typeof entry.fullName === 'string') : [];
   } catch {
     return [];
   }
 }
 
 function writeLocalAccounts(accounts: LocalVaultUserRecord[]): void {
-  try {
-    localStorage.setItem(LOCAL_VAULT_ACCOUNTS_KEY, JSON.stringify(accounts));
-  } catch {
-    // Ignorar error de cuota
-  }
+  // Never report registration success when the account could not be persisted.
+  localStorage.setItem(LOCAL_VAULT_ACCOUNTS_KEY, JSON.stringify(accounts));
 }
 
 export const authService = {
@@ -96,8 +73,9 @@ export const authService = {
       const rawSession = localStorage.getItem(LOCAL_ACTIVE_SESSION_KEY);
       if (!rawSession) return null;
       const parsed = JSON.parse(rawSession) as AuthenticatedUser;
-      if (parsed?.id && parsed?.email) {
-        return parsed;
+      if (parsed?.id && parsed?.email && parsed.authMode === 'local_vault' &&
+          readLocalAccounts().some((account) => account.id === parsed.id && account.email === parsed.email)) {
+        return { ...parsed, fullName: sanitizeText(parsed.fullName) };
       }
       return null;
     } catch {
@@ -176,7 +154,7 @@ export const authService = {
       }
     }
 
-    // Modo Bóveda Local con Hash SHA-256
+    // Modo local: credenciales derivadas; datos del dispositivo NO cifrados.
     const accounts = readLocalAccounts();
     if (accounts.some((acc) => acc.email === cleanEmail)) {
       return {
@@ -185,7 +163,7 @@ export const authService = {
       };
     }
 
-    const passwordHashHex = await hashPasswordSha256(cleanEmail, params.password);
+    const credential = await createLocalCredential(params.password);
     const newUser: LocalVaultUserRecord = {
       id:
         typeof crypto !== 'undefined' && crypto.randomUUID
@@ -193,7 +171,7 @@ export const authService = {
           : `user-${Date.now()}`,
       email: cleanEmail,
       fullName: cleanName,
-      passwordHashHex,
+      credential,
       createdAt: new Date().toISOString(),
     };
 
@@ -260,18 +238,23 @@ export const authService = {
       };
     }
 
-    // Verificación contra Bóveda Local con Hash SHA-256
     const accounts = readLocalAccounts();
-    const passwordHashHex = await hashPasswordSha256(cleanEmail, params.password);
-    const matched = accounts.find(
-      (acc) => acc.email === cleanEmail && acc.passwordHashHex === passwordHashHex
-    );
+    const matched = accounts.find((account) => account.email === cleanEmail);
+    const valid = matched && (matched.credential
+      ? await verifyLocalCredential(params.password, matched.credential)
+      : await verifyLegacyCredential(cleanEmail, params.password, matched.passwordHashHex ?? ''));
 
-    if (!matched) {
+    if (!matched || !valid) {
       return {
         success: false,
         errorMessage: 'El correo o la contraseña no son correctos. Verifica tus datos.',
       };
+    }
+
+    if (!matched.credential) {
+      matched.credential = await createLocalCredential(params.password);
+      delete matched.passwordHashHex;
+      writeLocalAccounts(accounts);
     }
 
     const sessionUser: AuthenticatedUser = {
@@ -293,16 +276,12 @@ export const authService = {
    * Cierra la sesión y limpia los datos sensibles del dispositivo.
    */
   async logout(wipeLocalHealthCache = false): Promise<void> {
+    const user = await this.getCurrentUser();
+    if (wipeLocalHealthCache && user) await clearSensitiveUserStorage(user.id);
     if (supabase) {
-      await supabase.auth.signOut();
+      const { error } = await supabase.auth.signOut({ scope: 'local' });
+      if (error) throw error;
     }
-    try {
-      localStorage.removeItem(LOCAL_ACTIVE_SESSION_KEY);
-    } catch {
-      // Ignorar
-    }
-    if (wipeLocalHealthCache) {
-      await clearSensitiveUserStorage();
-    }
+    localStorage.removeItem(LOCAL_ACTIVE_SESSION_KEY);
   },
 };

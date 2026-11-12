@@ -1,0 +1,78 @@
+name: Validate remediation patch
+on:
+  push:
+    branches:
+      - improvements/stage-1-integrity-privacy
+      - improvements/stage-2-reliable-sync
+      - improvements/stage-3-domain-consistency
+      - improvements/stage-4-quality-pwa
+    paths: ['.review/change.json']
+permissions:
+  contents: write
+concurrency:
+  group: remediation-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: postgres
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Verify and apply the reviewed patch
+        run: |
+          python3 - <<'PY'
+          import base64, hashlib, json, os, subprocess, zlib
+          from pathlib import Path
+          data = json.loads(Path('.review/change.json').read_text())
+          assert data['branch'] == os.environ['GITHUB_REF_NAME']
+          assert subprocess.check_output(['git', 'rev-parse', 'HEAD^'], text=True).strip() == data['expected_parent']
+          patch = zlib.decompress(base64.b64decode(data['patch']))
+          assert hashlib.sha256(patch).hexdigest() == data['sha256']
+          subprocess.run(['git', 'apply', '--check', '-'], input=patch, check=True)
+          subprocess.run(['git', 'apply', '-'], input=patch, check=True)
+          PY
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+        env:
+          VITE_AUTH_MODE: local
+      - run: git diff --check
+      - name: Validate PostgreSQL schema and isolation
+        run: |
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/bootstrap.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/schema.sql
+          for file in supabase/migrations/*.sql; do psql -v ON_ERROR_STOP=1 -f "$file"; done
+          for file in supabase/tests/*.sql; do
+            [ "$file" = supabase/tests/bootstrap.sql ] || psql -v ON_ERROR_STOP=1 -f "$file"
+          done
+      - name: Commit only to the reviewed branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          rm .review/change.json
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'fix: apply validated remediation stage'
+          AUTH=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $AUTH" push origin "HEAD:${GITHUB_REF_NAME}"

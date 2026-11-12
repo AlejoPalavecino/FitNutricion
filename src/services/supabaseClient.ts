@@ -17,6 +17,6 @@ export const supabase: SupabaseClient | null = envConfig.isCloudConfigured
     })
   : null;
 
-export function isSupabaseConnected(): boolean {
+export function isSupabaseConfigured(): boolean {
   return supabase !== null;
 }
