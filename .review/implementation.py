@@ -25,3 +25,6 @@ for line in p.read_text().splitlines():
 p.write_text('\n'.join(lines)+'\n')
 subprocess.run(['node','scripts/organize-imports.cjs'],check=True)
 subprocess.run(['npm','run','format'],check=True,stdout=subprocess.DEVNULL)
+runpy.run_path(str(root/'quality_guard.py'))
+subprocess.run(['node','scripts/organize-imports.cjs'],check=True)
+subprocess.run(['npm','run','format'],check=True,stdout=subprocess.DEVNULL)
