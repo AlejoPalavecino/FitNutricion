@@ -1,3 +1,4 @@
+import { cloudSyncService } from '../services/cloudSyncService';
 import { mapSafeAuthError } from '../services/securityService';
 import { create } from 'zustand';
 import {
@@ -107,6 +108,8 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   logout: async (wipeDeviceData = false) => {
     authGeneration += 1;
+    await cloudSyncService.drain();
+    cloudSyncService.disconnect();
     await authService.logout(wipeDeviceData);
     useNutritionStore.getState().clearActiveSessionState();
     set({ currentUser: null });

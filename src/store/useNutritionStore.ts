@@ -98,7 +98,7 @@ export interface OnboardingDraft {
   selectedPhase: NutritionalPhase | null;
 }
 
-interface PersistedUserSnapshot {
+export interface PersistedUserSnapshot {
   userProfile: UserProfile | null;
   biometricLogs: BiometricLog[];
   customFoods: FoodItem[];
@@ -317,8 +317,7 @@ function sanitizeSnapshot(
   };
 }
 
-function persistCurrentUserState(state: NutritionState): void {
-  if (!state.activeUserId) return;
+function snapshotFromState(state: NutritionState): PersistedUserSnapshot {
   const baseFoodIds = new Set(INITIAL_FOOD_ITEMS.map((f) => f.id));
   const baseRecipeIds = new Set(INITIAL_RECIPES.map((r) => r.id));
   const baseExerciseIds = new Set(OPENGYM_EXERCISE_CATALOG.map((e) => e.id));
@@ -342,10 +341,13 @@ function persistCurrentUserState(state: NutritionState): void {
     deletedRecordIds: state.deletedRecordIds,
   };
 
-  void Promise.resolve(offlineFirstStorage.setItem(
-    getUserStorageKey(state.activeUserId),
-    JSON.stringify(snapshot)
-  )).catch(reportLocalFailure);
+  return snapshot;
+}
+function persistCurrentUserState(state: NutritionState, capture = true): void {
+  if (!state.activeUserId) return;
+  const snapshot = snapshotFromState(state);
+  void Promise.resolve(offlineFirstStorage.setItem(getUserStorageKey(state.activeUserId), JSON.stringify(snapshot))).catch(reportLocalFailure);
+  if (capture) cloudSyncService.capture(state.activeUserId, snapshot);
 }
 
 export const useNutritionStore = create<NutritionState>()((set, get) => ({
@@ -374,30 +376,6 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
     if (generation !== sessionGeneration) return;
 
     const isNewRegistration = Boolean(options?.isNewRegistration);
-
-    if (isNewRegistration) {
-      set({
-        activeUserId: user.id,
-        activeUserFullName: user.fullName,
-        userProfile: null,
-        biometricLogs: [],
-        foods: INITIAL_FOOD_ITEMS,
-        recipes: INITIAL_RECIPES,
-        timelineLogs: [],
-        metabolicCheckins: [],
-        selectedDate: getTodayIso(),
-        exerciseCatalog: OPENGYM_EXERCISE_CATALOG,
-        workoutRoutines: [],
-        workoutSessions: [],
-        activeWorkoutDraft: null,
-        routineEditorDraft: null,
-        onboardingDraft: null,
-        deletedRecordIds: [],
-      });
-      persistCurrentUserState(get());
-      await cloudSyncService.purgeCloudSeedData(user.id);
-      return;
-    }
 
     // Limpiar en memoria cualquier estado previo antes de cargar la cuenta actual
     if (get().activeUserId !== user.id) {
@@ -468,155 +446,24 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
       deletedRecordIds: localSnapshot.deletedRecordIds,
     });
 
-    // Si Supabase Cloud está activo, hidratar y fusionar sin perder ningún registro local
-    const cloudData = await cloudSyncService.fetchUserCloudData(
-      user.id,
-      mergedFoods,
-      mergedRecipes
-    );
-
-    if (generation !== sessionGeneration || get().activeUserId !== user.id) return;
-    if (cloudData) {
-      const current = get();
-      const deletedSet = new Set(current.deletedRecordIds);
-
-      // 1. Perfil: elegir el más reciente entre local y nube
-      let finalProfile = current.userProfile;
-      if (cloudData.userProfile && current.userProfile) {
-        finalProfile =
-          cloudData.userProfile.updatedAt >= current.userProfile.updatedAt
-            ? cloudData.userProfile
-            : current.userProfile;
-      } else {
-        finalProfile = cloudData.userProfile ?? current.userProfile;
-      }
-
-      // 2. Alimentos personalizados: unión por ID
-      const customFoodMap = new Map<string, FoodItem>();
-      for (const cf of cloudData.customFoods) {
-        if (!deletedSet.has(cf.id)) customFoodMap.set(cf.id, cf);
-      }
-      for (const lf of current.foods.filter((f) => f.isCustom)) {
-        if (!deletedSet.has(lf.id)) customFoodMap.set(lf.id, lf);
-      }
-      const finalFoods = [
-        ...Array.from(customFoodMap.values()),
-        ...INITIAL_FOOD_ITEMS.map((f) => ({
-          ...f,
-          isFavorite: favSet.has(f.id),
-        })),
-      ];
-
-      // 3. Biometría: unión por fecha (priorizando local si fue editado)
-      const bioByDate = new Map<string, BiometricLog>();
-      for (const cb of cloudData.biometricLogs) {
-        if (!deletedSet.has(cb.id)) bioByDate.set(cb.date, cb);
-      }
-      for (const lb of current.biometricLogs) {
-        if (!deletedSet.has(lb.id)) bioByDate.set(lb.date, lb);
-      }
-      const finalBioLogs = recalculateBiometricTrends(
-        Array.from(bioByDate.values()).sort((a, b) =>
-          a.date.localeCompare(b.date)
-        ),
-        finalProfile?.ewmaAlpha ?? 0.12
-      );
-
-      // 4. Comidas registradas (timelineLogs): unión por ID
-      const tlById = new Map<string, TimelineLog>();
-      for (const ct of cloudData.timelineLogs) {
-        if (!deletedSet.has(ct.id)) tlById.set(ct.id, ct);
-      }
-      for (const lt of current.timelineLogs) {
-        if (!deletedSet.has(lt.id)) tlById.set(lt.id, lt);
-      }
-      const finalTimelineLogs = Array.from(tlById.values());
-
-      // 5. Check-ins metabólicos: unión por ID
-      const checkinById = new Map<string, MetabolicCheckin>();
-      for (const cc of cloudData.metabolicCheckins) {
-        if (!deletedSet.has(cc.id)) checkinById.set(cc.id, cc);
-      }
-      for (const lc of current.metabolicCheckins) {
-        if (!deletedSet.has(lc.id)) checkinById.set(lc.id, lc);
-      }
-      const finalCheckins = Array.from(checkinById.values()).sort((a, b) =>
-        b.weekDate.localeCompare(a.weekDate)
-      );
-
-      // 6. Rutinas: unión por ID (priorizando la versión local por si hubo cambios recientes)
-      const routineById = new Map<string, WorkoutRoutine>();
-      for (const cr of cloudData.workoutRoutines) {
-        if (!deletedSet.has(cr.id)) routineById.set(cr.id, cr);
-      }
-      for (const lr of current.workoutRoutines) {
-        if (!deletedSet.has(lr.id)) routineById.set(lr.id, lr);
-      }
-      const finalRoutines = Array.from(routineById.values());
-
-      // 7. Sesiones de gimnasio: unión por ID
-      const sessionById = new Map<string, WorkoutSession>();
-      for (const cs of cloudData.workoutSessions) {
-        if (!deletedSet.has(cs.id)) sessionById.set(cs.id, cs);
-      }
-      for (const ls of current.workoutSessions) {
-        if (!deletedSet.has(ls.id)) sessionById.set(ls.id, ls);
-      }
-      const finalSessions = Array.from(sessionById.values()).sort((a, b) =>
-        b.date.localeCompare(a.date)
-      );
-
-      set({
-        userProfile: finalProfile,
-        foods: finalFoods,
-        biometricLogs: finalBioLogs,
-        timelineLogs: finalTimelineLogs,
-        metabolicCheckins: finalCheckins,
-        workoutRoutines: finalRoutines,
-        workoutSessions: finalSessions,
-      });
-
-      // Re-sincronizar en segundo plano hacia Supabase cualquier dato local pendiente
-      if (finalProfile) {
-        void cloudSyncService.upsertUserProfile(user.id, finalProfile);
-      }
-      for (const cf of customFoodMap.values()) {
-        void cloudSyncService.upsertCustomFood(user.id, cf);
-      }
-      const cloudBioDates = new Set(cloudData.biometricLogs.map((b) => b.date));
-      for (const lb of finalBioLogs) {
-        if (!cloudBioDates.has(lb.date)) {
-          void cloudSyncService.upsertBiometricLog(user.id, lb);
-        }
-      }
-      const cloudTlIds = new Set(cloudData.timelineLogs.map((t) => t.id));
-      for (const lt of finalTimelineLogs) {
-        if (!cloudTlIds.has(lt.id)) {
-          void cloudSyncService.insertTimelineLog(user.id, lt);
-        }
-      }
-      const cloudRoutineIds = new Set(
-        cloudData.workoutRoutines.map((r) => r.id)
-      );
-      for (const lr of finalRoutines) {
-        if (!cloudRoutineIds.has(lr.id)) {
-          void cloudSyncService.upsertWorkoutRoutine(user.id, lr);
-        }
-      }
-      const cloudSessionIds = new Set(
-        cloudData.workoutSessions.map((s) => s.id)
-      );
-      for (const ls of finalSessions) {
-        if (!cloudSessionIds.has(ls.id)) {
-          void cloudSyncService.insertWorkoutSession(user.id, ls);
-        }
-      }
-    }
-
-    persistCurrentUserState(get());
+    await cloudSyncService.connect(user, snapshotFromState(get()), (remote) => {
+      if (generation !== sessionGeneration || get().activeUserId !== user.id) return;
+      const favorites = new Set(remote.favoriteFoodIds);
+      set({ userProfile: remote.userProfile,
+        biometricLogs: recalculateBiometricTrends(remote.biometricLogs, remote.userProfile?.ewmaAlpha ?? 0.12),
+        foods: [...remote.customFoods, ...INITIAL_FOOD_ITEMS.map((f) => ({ ...f, isFavorite: favorites.has(f.id) }))],
+        recipes: [...remote.customRecipes, ...INITIAL_RECIPES],
+        exerciseCatalog: [...remote.customExercises, ...OPENGYM_EXERCISE_CATALOG],
+        timelineLogs: remote.timelineLogs, metabolicCheckins: remote.metabolicCheckins,
+        workoutRoutines: remote.workoutRoutines, workoutSessions: remote.workoutSessions,
+        deletedRecordIds: remote.deletedRecordIds });
+      persistCurrentUserState(get(), false);
+    });
+    if (generation === sessionGeneration) persistCurrentUserState(get(), false);
   },
 
   clearActiveSessionState: () => {
+    cloudSyncService.disconnect();
     sessionGeneration += 1;
     useSyncStatusStore.getState().reset();
     set({
@@ -774,13 +621,7 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
 
     persistCurrentUserState(get());
 
-    if (state.activeUserId) {
-      const ownerId = state.activeUserId;
-      void (async () => {
-        const result = await cloudSyncService.upsertUserProfile(ownerId, newProfile);
-        if (result.status !== 'error') await cloudSyncService.upsertBiometricLog(ownerId, latestBioEntry);
-      })();
-    }
+
   },
 
   updatePhaseAndMacros: (phase, customAdjustmentPercent) => {
@@ -834,12 +675,7 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
     set({ userProfile: updatedProfile });
     persistCurrentUserState(get());
 
-    if (state.activeUserId) {
-      void cloudSyncService.upsertUserProfile(
-        state.activeUserId,
-        updatedProfile
-      );
-    }
+
   },
 
   updateEwmaAlpha: (alpha) => {
@@ -861,12 +697,7 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
     });
     persistCurrentUserState(get());
 
-    if (state.activeUserId) {
-      void cloudSyncService.upsertUserProfile(
-        state.activeUserId,
-        updatedProfile
-      );
-    }
+
   },
 
   addOrUpdateBiometricLog: (payload) => {
@@ -961,16 +792,7 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
     });
     persistCurrentUserState(get());
 
-    if (state.activeUserId) {
-      // A backdated correction changes that row AND subsequent EWMA values.
-      for (const changedLog of recalculated.filter((log) => log.date >= targetDate)) {
-        void cloudSyncService.upsertBiometricLog(state.activeUserId, changedLog);
-      }
-      void cloudSyncService.upsertUserProfile(
-        state.activeUserId,
-        updatedProfile
-      );
-    }
+
   },
 
   computeCurrentAdaptiveTdeeStatus: () => {
@@ -1046,12 +868,7 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
         metabolicCheckins: [checkin, ...state.metabolicCheckins],
       });
       persistCurrentUserState(get());
-      if (state.activeUserId) {
-        void cloudSyncService.insertMetabolicCheckin(
-          state.activeUserId,
-          checkin
-        );
-      }
+
       return checkin;
     }
 
@@ -1104,13 +921,7 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
     });
     persistCurrentUserState(get());
 
-    if (state.activeUserId) {
-      void cloudSyncService.insertMetabolicCheckin(state.activeUserId, checkin);
-      void cloudSyncService.upsertUserProfile(
-        state.activeUserId,
-        updatedProfile
-      );
-    }
+
 
     return checkin;
   },
@@ -1188,15 +999,7 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
     });
     persistCurrentUserState(get());
 
-    if (state.activeUserId) {
-      const uid = state.activeUserId;
-      void (async () => {
-        if (matchedFood?.isCustom) {
-          await cloudSyncService.upsertCustomFood(uid, matchedFood);
-        }
-        await cloudSyncService.insertTimelineLog(uid, newLog);
-      })();
-    }
+
   },
 
   updateTimelineLogGrams: (logId, gramsConsumed) => {
@@ -1230,13 +1033,7 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
     set({ timelineLogs: updated });
     persistCurrentUserState(get());
 
-    if (state.activeUserId) {
-      void cloudSyncService.updateTimelineLogGrams(
-        state.activeUserId,
-        logId,
-        safeGrams
-      );
-    }
+
   },
 
   removeTimelineLog: (logId) => {
@@ -1246,9 +1043,7 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
       deletedRecordIds: Array.from(new Set([...state.deletedRecordIds, logId])),
     });
     persistCurrentUserState(get());
-    if (state.activeUserId) {
-      void cloudSyncService.deleteTimelineLog(state.activeUserId, logId);
-    }
+
   },
 
   multiPasteTimelineLogs: (logIds, targetDates) => {
@@ -1267,9 +1062,7 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
           date,
         };
         clonedLogs.push(cloned);
-        if (state.activeUserId) {
-          void cloudSyncService.insertTimelineLog(state.activeUserId, cloned);
-        }
+
       }
     }
 
@@ -1292,9 +1085,7 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
     }));
     persistCurrentUserState(get());
 
-    if (state.activeUserId) {
-      void cloudSyncService.upsertCustomFood(state.activeUserId, newFood);
-    }
+
     return newFood;
   },
 
@@ -1307,9 +1098,7 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
     persistCurrentUserState(get());
     const state = get();
     const updatedFood = state.foods.find((f) => f.id === foodId);
-    if (state.activeUserId && updatedFood?.isCustom) {
-      void cloudSyncService.upsertCustomFood(state.activeUserId, updatedFood);
-    }
+
   },
 
   addCustomRecipe: (recipeData) => {
@@ -1344,9 +1133,7 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
     persistCurrentUserState(get());
 
     const activeUserId = get().activeUserId;
-    if (activeUserId) {
-      void cloudSyncService.upsertWorkoutRoutine(activeUserId, routine);
-    }
+
   },
 
   addExerciseToRoutine: (routineId, exerciseId) => {
@@ -1384,9 +1171,7 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
 
     const state = get();
     const updated = state.workoutRoutines.find((r) => r.id === routineId);
-    if (state.activeUserId && updated) {
-      void cloudSyncService.upsertWorkoutRoutine(state.activeUserId, updated);
-    }
+
   },
 
   deleteWorkoutRoutine: (routineId) => {
@@ -1407,9 +1192,7 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
       ),
     });
     persistCurrentUserState(get());
-    if (state.activeUserId) {
-      void cloudSyncService.deleteWorkoutRoutine(state.activeUserId, routineId);
-    }
+
   },
 
   logWorkoutSession: (payload) => {
@@ -1469,12 +1252,7 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
     });
     persistCurrentUserState(get());
 
-    if (state.activeUserId) {
-      void cloudSyncService.insertWorkoutSession(
-        state.activeUserId,
-        newSession
-      );
-    }
+
 
     return newSession;
   },
@@ -1488,9 +1266,7 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
       ),
     });
     persistCurrentUserState(get());
-    if (state.activeUserId) {
-      void cloudSyncService.deleteWorkoutSession(state.activeUserId, sessionId);
-    }
+
   },
 
   addCustomExerciseCatalogItem: (item) => {
