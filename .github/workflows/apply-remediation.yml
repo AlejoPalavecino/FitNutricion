@@ -61,11 +61,12 @@ jobs:
           done
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
-      - name: Commit only to the reviewed branch
+      - name: Commit only source to the reviewed branch
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           rm -rf .review
+          git restore --source=HEAD -- .github/workflows
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
