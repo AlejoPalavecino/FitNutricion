@@ -1,12 +1,5 @@
-import { localDate, weekStart } from '../../lib/dates';
+import { CheckCircle2, Edit3, Plus, RefreshCw, Scale } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
-import {
-  CheckCircle2,
-  Edit3,
-  Plus,
-  RefreshCw,
-  Scale,
-} from 'lucide-react';
 import {
   CartesianGrid,
   Line,
@@ -16,6 +9,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+import { localDate, weekStart } from '../../lib/dates';
 import { useNutritionStore } from '../../store/useNutritionStore';
 
 interface BiometricCheckinViewProps {
@@ -32,34 +26,26 @@ const PHASE_LABELS: Record<string, string> = {
 export const BiometricCheckinView: React.FC<BiometricCheckinViewProps> = ({
   onOpenReconfigure,
 }) => {
-  const timelineLogs = useNutritionStore(s=>s.timelineLogs);
-  const completeDates = useNutritionStore(s=>s.completedNutritionDates);
-  const checkins = useNutritionStore(s=>s.metabolicCheckins);
-  const alreadyApplied = checkins.some(c=>weekStart(c.weekDate)===weekStart());
+  useNutritionStore((s) => s.timelineLogs);
+  useNutritionStore((s) => s.completedNutritionDates);
+  const checkins = useNutritionStore((s) => s.metabolicCheckins);
+  const alreadyApplied = checkins.some((c) => weekStart(c.weekDate) === weekStart());
   const userProfile = useNutritionStore((s) => s.userProfile);
   const biometricLogs = useNutritionStore((s) => s.biometricLogs);
-  const addOrUpdateBiometricLog = useNutritionStore(
-    (s) => s.addOrUpdateBiometricLog
-  );
+  const addOrUpdateBiometricLog = useNutritionStore((s) => s.addOrUpdateBiometricLog);
   const computeCurrentAdaptiveTdeeStatus = useNutritionStore(
-    (s) => s.computeCurrentAdaptiveTdeeStatus
+    (s) => s.computeCurrentAdaptiveTdeeStatus,
   );
-  const executeWeeklyMetabolicCheckin = useNutritionStore(
-    (s) => s.executeWeeklyMetabolicCheckin
-  );
+  const executeWeeklyMetabolicCheckin = useNutritionStore((s) => s.executeWeeklyMetabolicCheckin);
 
   const sortedLogs = useMemo(
     () => [...biometricLogs].sort((a, b) => a.date.localeCompare(b.date)),
-    [biometricLogs]
+    [biometricLogs],
   );
   const latestLog = sortedLogs[sortedLogs.length - 1];
 
-  const [logDate, setLogDate] = useState(() =>
-    localDate()
-  );
-  const [scaleWeight, setScaleWeight] = useState<number>(
-    latestLog?.scaleWeightKg ?? 70
-  );
+  const [logDate, setLogDate] = useState(() => localDate());
+  const [scaleWeight, setScaleWeight] = useState<number>(latestLog?.scaleWeightKg ?? 70);
   const [checkinBanner, setCheckinBanner] = useState<string | null>(null);
 
   useEffect(() => {
@@ -68,16 +54,18 @@ export const BiometricCheckinView: React.FC<BiometricCheckinViewProps> = ({
     }
   }, [latestLog?.scaleWeightKg]);
 
-  const adaptiveStatus = useMemo(
-    () => computeCurrentAdaptiveTdeeStatus(),
-    [computeCurrentAdaptiveTdeeStatus, biometricLogs, userProfile, timelineLogs, completeDates]
-  );
+  const adaptiveStatus = computeCurrentAdaptiveTdeeStatus();
 
   if (!userProfile) return null;
 
   const handlePeriodicControlSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (logDate > localDate() || !Number.isFinite(scaleWeight) || scaleWeight < 30 || scaleWeight > 250) {
+    if (
+      logDate > localDate() ||
+      !Number.isFinite(scaleWeight) ||
+      scaleWeight < 30 ||
+      scaleWeight > 250
+    ) {
       return;
     }
     addOrUpdateBiometricLog({
@@ -91,7 +79,7 @@ export const BiometricCheckinView: React.FC<BiometricCheckinViewProps> = ({
     const res = executeWeeklyMetabolicCheckin(true);
     if (res) {
       setCheckinBanner(
-        `¡Meta actualizada! Tu gasto diario pasó de ${res.previousTdee} a ${res.appliedTdee} kcal.`
+        `¡Meta actualizada! Tu gasto diario pasó de ${res.previousTdee} a ${res.appliedTdee} kcal.`,
       );
     }
   };
@@ -108,7 +96,8 @@ export const BiometricCheckinView: React.FC<BiometricCheckinViewProps> = ({
             Evolución de tu Peso · {userProfile.name}
           </h1>
           <p className="mt-1 text-sm text-slate-600">
-            Calculamos tu promedio suavizado a partir de tus propios pesajes para filtrar las variaciones diarias de agua.
+            Calculamos tu promedio suavizado a partir de tus propios pesajes para filtrar las
+            variaciones diarias de agua.
           </p>
         </div>
 
@@ -150,8 +139,7 @@ export const BiometricCheckinView: React.FC<BiometricCheckinViewProps> = ({
             {latestLog ? `${latestLog.scaleWeightKg.toFixed(1)} kg` : '—'}
           </div>
           <span className="mt-1 block text-xs text-slate-500">
-            Grasa estimada:{' '}
-            {latestLog ? `${latestLog.estimatedBfPercent.toFixed(1)}%` : '—'}
+            Grasa estimada: {latestLog ? `${latestLog.estimatedBfPercent.toFixed(1)}%` : '—'}
           </span>
         </div>
 
@@ -176,8 +164,8 @@ export const BiometricCheckinView: React.FC<BiometricCheckinViewProps> = ({
             <span className="text-base font-semibold text-slate-500">kcal</span>
           </div>
           <span className="mt-1 block text-xs text-slate-500">
-            {userProfile.targetProteinG}g proteína · {userProfile.targetCarbsG}g
-            carbos · {userProfile.targetFatG}g grasas
+            {userProfile.targetProteinG}g proteína · {userProfile.targetCarbsG}g carbos ·{' '}
+            {userProfile.targetFatG}g grasas
           </span>
         </div>
       </div>
@@ -192,21 +180,21 @@ export const BiometricCheckinView: React.FC<BiometricCheckinViewProps> = ({
                 <Scale className="h-5 w-5" />
               </div>
               <div>
-                <h2 className="text-lg font-bold text-slate-900">
-                  Anotar mi peso
-                </h2>
-                <p className="text-xs text-slate-500">
-                  Pésate por la mañana y guárdalo en 1 clic
-                </p>
+                <h2 className="text-lg font-bold text-slate-900">Anotar mi peso</h2>
+                <p className="text-xs text-slate-500">Pésate por la mañana y guárdalo en 1 clic</p>
               </div>
             </div>
 
             <form onSubmit={handlePeriodicControlSubmit} className="space-y-4">
               <div>
-                <label className="mb-1.5 block text-sm font-semibold text-slate-700">
+                <label
+                  htmlFor="biometriccheckinview-field-1"
+                  className="mb-1.5 block text-sm font-semibold text-slate-700"
+                >
                   Fecha
                 </label>
                 <input
+                  id="biometriccheckinview-field-1"
                   type="date"
                   value={logDate}
                   onChange={(e) => setLogDate(e.target.value)}
@@ -215,20 +203,22 @@ export const BiometricCheckinView: React.FC<BiometricCheckinViewProps> = ({
               </div>
 
               <div>
-                <label className="mb-1.5 block text-sm font-semibold text-slate-700">
+                <label
+                  htmlFor="biometriccheckinview-field-2"
+                  className="mb-1.5 block text-sm font-semibold text-slate-700"
+                >
                   Peso (kg)
                 </label>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() =>
-                      setScaleWeight((w) => Number((w - 0.2).toFixed(1)))
-                    }
+                    onClick={() => setScaleWeight((w) => Number((w - 0.2).toFixed(1)))}
                     className="rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-100"
                   >
                     -0.2
                   </button>
                   <input
+                    id="biometriccheckinview-field-2"
                     type="number"
                     step={0.1}
                     min={30}
@@ -239,9 +229,7 @@ export const BiometricCheckinView: React.FC<BiometricCheckinViewProps> = ({
                   />
                   <button
                     type="button"
-                    onClick={() =>
-                      setScaleWeight((w) => Number((w + 0.2).toFixed(1)))
-                    }
+                    onClick={() => setScaleWeight((w) => Number((w + 0.2).toFixed(1)))}
                     className="rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-100"
                   >
                     +0.2
@@ -283,9 +271,7 @@ export const BiometricCheckinView: React.FC<BiometricCheckinViewProps> = ({
                     <p>
                       Según tu progreso real ({adaptiveStatus.weightSlopeKgPerWeek >= 0 ? '+' : ''}
                       {adaptiveStatus.weightSlopeKgPerWeek} kg/semana), el modelo estima un gasto de{' '}
-                      <strong className="text-slate-900">
-                        {adaptiveStatus.appliedTdee} kcal
-                      </strong>{' '}
+                      <strong className="text-slate-900">{adaptiveStatus.appliedTdee} kcal</strong>{' '}
                       al día.
                     </p>
                     <button
@@ -295,12 +281,17 @@ export const BiometricCheckinView: React.FC<BiometricCheckinViewProps> = ({
                       className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 py-2.5 text-xs font-bold text-white hover:bg-indigo-500"
                     >
                       <RefreshCw className="h-4 w-4" />
-                      <span>{alreadyApplied ? 'Revisión semanal ya registrada' : 'Actualizar mis calorías de la semana'}</span>
+                      <span>
+                        {alreadyApplied
+                          ? 'Revisión semanal ya registrada'
+                          : 'Actualizar mis calorías de la semana'}
+                      </span>
                     </button>
                   </div>
                 ) : (
                   <p className="mt-1.5 text-xs text-slate-500">
-                    Registra tu peso y comidas durante al menos 2 semanas para que el motor calcule y ajuste tus calorías estimadas con tu confirmación.
+                    Registra tu peso y comidas durante al menos 2 semanas para que el motor calcule
+                    y ajuste tus calorías estimadas con tu confirmación.
                   </p>
                 )}
               </div>
@@ -313,16 +304,14 @@ export const BiometricCheckinView: React.FC<BiometricCheckinViewProps> = ({
           <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-xs">
             <div className="mb-4 flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-bold text-slate-900">
-                  Gráfica de tu Progreso
-                </h2>
+                <h2 className="text-lg font-bold text-slate-900">Gráfica de tu Progreso</h2>
                 <p className="text-xs text-slate-500">
-                  La línea verde muestra tu tendencia estimada; la gris es el peso de la báscula cada día
+                  La línea verde muestra tu tendencia estimada; la gris es el peso de la báscula
+                  cada día
                 </p>
               </div>
               <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">
-                {sortedLogs.length}{' '}
-                {sortedLogs.length === 1 ? 'registro' : 'registros'}
+                {sortedLogs.length} {sortedLogs.length === 1 ? 'registro' : 'registros'}
               </span>
             </div>
 

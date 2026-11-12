@@ -1,5 +1,3 @@
-import { localDate } from '../../lib/dates';
-import React, { useMemo, useState } from 'react';
 import {
   Calendar,
   ChefHat,
@@ -12,14 +10,18 @@ import {
   Trash2,
   Utensils,
 } from 'lucide-react';
-import type { FoodItem, MacroBreakdown } from '../../types/nutrition';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { localDate } from '../../lib/dates';
+import { generateUuid } from '../../lib/ids';
 import {
   calculateFoodItemMacros,
   calculateRemainingMacros,
   scaleRecipeToRemaining,
   suggestBridgeFoods,
 } from '../../lib/metabolism';
+import { searchOpenFoodFacts } from '../../services/openFoodFacts';
 import { useNutritionStore } from '../../store/useNutritionStore';
+import type { FoodItem, MacroBreakdown } from '../../types/nutrition';
 
 const QUICK_MEAL_SLOTS = [
   { label: 'Desayuno', hour: 8 },
@@ -36,8 +38,8 @@ function getHourFriendlyLabel(hour: number): string {
 }
 
 export const NutritionDashboard: React.FC = () => {
-  const completedDates = useNutritionStore(s=>s.completedNutritionDates);
-  const markComplete = useNutritionStore(s=>s.markNutritionDayComplete);
+  const completedDates = useNutritionStore((s) => s.completedNutritionDates);
+  const markComplete = useNutritionStore((s) => s.markNutritionDayComplete);
   const userProfile = useNutritionStore((s) => s.userProfile);
   const foods = useNutritionStore((s) => s.foods);
   const recipes = useNutritionStore((s) => s.recipes);
@@ -46,19 +48,13 @@ export const NutritionDashboard: React.FC = () => {
 
   const setSelectedDate = useNutritionStore((s) => s.setSelectedDate);
   const addTimelineLog = useNutritionStore((s) => s.addTimelineLog);
-  const updateTimelineLogGrams = useNutritionStore(
-    (s) => s.updateTimelineLogGrams
-  );
+  const updateTimelineLogGrams = useNutritionStore((s) => s.updateTimelineLogGrams);
   const removeTimelineLog = useNutritionStore((s) => s.removeTimelineLog);
-  const multiPasteTimelineLogs = useNutritionStore(
-    (s) => s.multiPasteTimelineLogs
-  );
+  const multiPasteTimelineLogs = useNutritionStore((s) => s.multiPasteTimelineLogs);
   const addCustomFood = useNutritionStore((s) => s.addCustomFood);
 
   const [activeHourToLog, setActiveHourToLog] = useState<number>(13);
-  const [selectedLogIdsForPaste, setSelectedLogIdsForPaste] = useState<
-    string[]
-  >([]);
+  const [selectedLogIdsForPaste, setSelectedLogIdsForPaste] = useState<string[]>([]);
   const [targetPasteDate, setTargetPasteDate] = useState<string>(() => {
     const d = new Date();
     d.setDate(d.getDate() + 1);
@@ -76,30 +72,26 @@ export const NutritionDashboard: React.FC = () => {
   const [customProtein100, setCustomProtein100] = useState<number | ''>('');
   const [customCarbs100, setCustomCarbs100] = useState<number | ''>('');
   const [customFat100, setCustomFat100] = useState<number | ''>('');
+  const [customFiber100, setCustomFiber100] = useState<number | ''>('');
   const [customServingGrams, setCustomServingGrams] = useState<number>(100);
 
-  const foodsMap = useMemo(
-    () => Object.fromEntries(foods.map((f) => [f.id, f])),
-    [foods]
-  );
+  const foodsMap = useMemo(() => Object.fromEntries(foods.map((f) => [f.id, f])), [foods]);
 
   const dayLogs = useMemo(
     () => timelineLogs.filter((l) => l.date === selectedDate),
-    [timelineLogs, selectedDate]
+    [timelineLogs, selectedDate],
   );
 
   const consumedMacros: MacroBreakdown = useMemo(() => {
     return dayLogs.reduce(
       (acc, item) => ({
         kcal: acc.kcal + item.calculatedMacros.kcal,
-        proteinG: Number(
-          (acc.proteinG + item.calculatedMacros.proteinG).toFixed(1)
-        ),
+        proteinG: Number((acc.proteinG + item.calculatedMacros.proteinG).toFixed(1)),
         carbsG: Number((acc.carbsG + item.calculatedMacros.carbsG).toFixed(1)),
         fatG: Number((acc.fatG + item.calculatedMacros.fatG).toFixed(1)),
         fiberG: Number((acc.fiberG + item.calculatedMacros.fiberG).toFixed(1)),
       }),
-      { kcal: 0, proteinG: 0, carbsG: 0, fatG: 0, fiberG: 0 }
+      { kcal: 0, proteinG: 0, carbsG: 0, fatG: 0, fiberG: 0 },
     );
   }, [dayLogs]);
 
@@ -111,25 +103,22 @@ export const NutritionDashboard: React.FC = () => {
       fatG: userProfile?.targetFatG ?? 65,
       fiberG: userProfile?.targetFiberG ?? 34,
     }),
-    [userProfile]
+    [userProfile],
   );
 
   const remainingVector = useMemo(
     () => calculateRemainingMacros(targetMacros, consumedMacros),
-    [targetMacros, consumedMacros]
+    [targetMacros, consumedMacros],
   );
 
   const bridgeSuggestions = useMemo(
     () => suggestBridgeFoods(remainingVector, foods).slice(0, 3),
-    [remainingVector, foods]
+    [remainingVector, foods],
   );
 
   const scaledRecipes = useMemo(
-    () =>
-      recipes
-        .slice(0, 3)
-        .map((r) => scaleRecipeToRemaining(r, remainingVector, foodsMap)),
-    [recipes, remainingVector, foodsMap]
+    () => recipes.slice(0, 3).map((r) => scaleRecipeToRemaining(r, remainingVector, foodsMap)),
+    [recipes, remainingVector, foodsMap],
   );
 
   const filteredLocalFoods = useMemo(() => {
@@ -139,78 +128,38 @@ export const NutritionDashboard: React.FC = () => {
       (f) =>
         f.name.toLowerCase().includes(q) ||
         (f.brand && f.brand.toLowerCase().includes(q)) ||
-        (f.barcode && f.barcode.includes(q))
+        (f.barcode && f.barcode.includes(q)),
     );
   }, [foods, foodQuery]);
 
+  const foodRequest = useRef<AbortController | null>(null);
+  const [foodSearchMessage, setFoodSearchMessage] = useState('');
+  useEffect(() => () => foodRequest.current?.abort(), []);
   const handleSearchOpenFoodFacts = async () => {
-    const q = foodQuery.trim();
-    if (!q) return;
+    foodRequest.current?.abort();
+    const request = new AbortController();
+    foodRequest.current = request;
     setOffLoading(true);
+    setOffResults([]);
+    setFoodSearchMessage('');
     try {
-      const isBarcode = /^\d{8,14}$/.test(q);
-      if (isBarcode) {
-        const res = await fetch(
-          `https://world.openfoodfacts.org/api/v2/product/${q}.json`
+      const result = await searchOpenFoodFacts(foodQuery, request.signal);
+      if (request.signal.aborted) return;
+      setOffResults(result.foods);
+      setFoodSearchMessage(
+        result.incompleteCount
+          ? `${result.incompleteCount} productos omitidos por datos incompletos. Puedes crear un alimento verificando su etiqueta.`
+          : result.foods.length
+            ? 'Fuente: Open Food Facts. Verifica los datos con la etiqueta del producto.'
+            : 'No se encontraron productos con datos completos.',
+      );
+    } catch (error) {
+      if (!request.signal.aborted)
+        setFoodSearchMessage(
+          error instanceof Error ? error.message : 'No se pudo completar la búsqueda.',
         );
-        const data = await res.json();
-        if (data?.product) {
-          const p = data.product;
-          const n = p.nutriments || {};
-          const item: FoodItem = {
-            id: `off-${q}`,
-            barcode: q,
-            name: p.product_name_es || p.product_name || `Producto ${q}`,
-            brand: p.brands || 'OpenFoodFacts',
-            kcalPer100g: Math.round(Number(n['energy-kcal_100g'] || 0)),
-            proteinPer100g: Number(Number(n.proteins_100g || 0).toFixed(1)),
-            carbsPer100g: Number(Number(n.carbohydrates_100g || 0).toFixed(1)),
-            fatPer100g: Number(Number(n.fat_100g || 0).toFixed(1)),
-            fiberPer100g: Number(Number(n.fiber_100g || 0).toFixed(1)),
-            defaultServingName: 'Porción 100g',
-            defaultServingGrams: 100,
-            isCustom: true,
-            isFavorite: false,
-          };
-          setOffResults([item]);
-        }
-      } else {
-        const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(
-          q
-        )}&search_simple=1&action=process&json=1&page_size=5`;
-        const res = await fetch(url);
-        const data = await res.json();
-        const list: FoodItem[] = (data?.products || []).map(
-          (p: Record<string, any>, idx: number) => {
-            const n = p.nutriments || {};
-            return {
-              id: `off-${p.code || idx}`,
-              barcode: p.code,
-              name:
-                p.product_name_es ||
-                p.product_name ||
-                'Alimento OpenFoodFacts',
-              brand: p.brands || 'OpenFoodFacts',
-              kcalPer100g: Math.round(Number(n['energy-kcal_100g'] || 0)),
-              proteinPer100g: Number(Number(n.proteins_100g || 0).toFixed(1)),
-              carbsPer100g: Number(
-                Number(n.carbohydrates_100g || 0).toFixed(1)
-              ),
-              fatPer100g: Number(Number(n.fat_100g || 0).toFixed(1)),
-              fiberPer100g: Number(Number(n.fiber_100g || 0).toFixed(1)),
-              defaultServingName: '100g',
-              defaultServingGrams: 100,
-              isCustom: true,
-              isFavorite: false,
-            };
-          }
-        );
-        setOffResults(list);
-      }
-    } catch {
-      setOffResults([]);
     } finally {
-      setOffLoading(false);
+      if (foodRequest.current === request) setOffLoading(false);
     }
   };
 
@@ -218,7 +167,7 @@ export const NutritionDashboard: React.FC = () => {
     if (selectedLogIdsForPaste.length === 0) return;
     multiPasteTimelineLogs(selectedLogIdsForPaste, [targetPasteDate]);
     setPasteFeedback(
-      `${selectedLogIdsForPaste.length} comidas copiadas al día ${targetPasteDate}.`
+      `${selectedLogIdsForPaste.length} comidas copiadas al día ${targetPasteDate}.`,
     );
     setSelectedLogIdsForPaste([]);
     setTimeout(() => setPasteFeedback(null), 3000);
@@ -228,27 +177,41 @@ export const NutritionDashboard: React.FC = () => {
     Math.min(100, Math.round((val / Math.max(1, target)) * 100));
 
   const loggedHours = useMemo(() => {
-    const hours = Array.from(new Set(dayLogs.map((l) => l.hour))).sort(
-      (a, b) => a - b
-    );
+    const hours = Array.from(new Set(dayLogs.map((l) => l.hour))).sort((a, b) => a - b);
     return hours;
   }, [dayLogs]);
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 px-4 py-8 sm:px-6">
       <div className="rounded-xl border bg-white p-3 text-sm" role="status">
-        <span>{completedDates.includes(selectedDate) ? 'Día confirmado completo para el cálculo adaptativo.' : 'Registro parcial: no se usará como día completo en el cálculo adaptativo.'}</span>
-        <button type="button" className="ml-3 underline" disabled={selectedDate > localDate() || dayLogs.length === 0} onClick={() => markComplete(selectedDate, !completedDates.includes(selectedDate))}>{completedDates.includes(selectedDate) ? 'Marcar como parcial' : 'Confirmar que registré todo el día'}</button>
+        <span>
+          {completedDates.includes(selectedDate)
+            ? 'Día confirmado completo para el cálculo adaptativo.'
+            : 'Registro parcial: no se usará como día completo en el cálculo adaptativo.'}
+        </span>
+        <button
+          type="button"
+          className="ml-3 underline"
+          disabled={selectedDate > localDate() || dayLogs.length === 0}
+          onClick={() => markComplete(selectedDate, !completedDates.includes(selectedDate))}
+        >
+          {completedDates.includes(selectedDate)
+            ? 'Marcar como parcial'
+            : 'Confirmar que registré todo el día'}
+        </button>
       </div>
+      {foodSearchMessage && (
+        <p role="status" className="rounded-xl border p-3 text-sm">
+          {foodSearchMessage}
+        </p>
+      )}
       {/* ====================================================================
           RESUMEN SIMPLE DEL DÍA
          ==================================================================== */}
       <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-xs">
         <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-extrabold text-slate-900">
-              Tus Comidas de Hoy
-            </h1>
+            <h1 className="text-2xl font-extrabold text-slate-900">Tus Comidas de Hoy</h1>
             <p className="text-sm text-slate-500">
               {remainingVector.kcal > 0
                 ? `Te faltan ${remainingVector.kcal} kcal y ${Math.max(0, remainingVector.P)}g de proteína para tu meta.`
@@ -260,6 +223,7 @@ export const NutritionDashboard: React.FC = () => {
             <Calendar className="h-4 w-4 text-slate-500" />
             <input
               type="date"
+              aria-label="Fecha de comidas"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
               className="bg-transparent text-sm font-bold text-slate-800 focus:outline-none"
@@ -279,12 +243,8 @@ export const NutritionDashboard: React.FC = () => {
               </span>
             </div>
             <div className="mt-1.5 flex items-baseline gap-1.5">
-              <span className="text-2xl font-extrabold text-slate-900">
-                {consumedMacros.kcal}
-              </span>
-              <span className="text-xs text-slate-500">
-                / {targetMacros.kcal} kcal
-              </span>
+              <span className="text-2xl font-extrabold text-slate-900">{consumedMacros.kcal}</span>
+              <span className="text-xs text-slate-500">/ {targetMacros.kcal} kcal</span>
             </div>
             <div className="mt-3 h-2.5 w-full overflow-hidden rounded-full bg-slate-200">
               <div
@@ -299,28 +259,19 @@ export const NutritionDashboard: React.FC = () => {
           <div className="rounded-2xl bg-blue-50/50 p-4 ring-1 ring-blue-100">
             <div className="flex items-center justify-between text-xs font-bold text-blue-800">
               <span>Proteínas</span>
-              <span>
-                {remainingVector.P >= 0
-                  ? `Faltan ${remainingVector.P}g`
-                  : 'Listo'}
-              </span>
+              <span>{remainingVector.P >= 0 ? `Faltan ${remainingVector.P}g` : 'Listo'}</span>
             </div>
             <div className="mt-1.5 flex items-baseline gap-1.5">
               <span className="text-2xl font-extrabold text-slate-900">
                 {consumedMacros.proteinG}g
               </span>
-              <span className="text-xs text-slate-500">
-                / {targetMacros.proteinG}g
-              </span>
+              <span className="text-xs text-slate-500">/ {targetMacros.proteinG}g</span>
             </div>
             <div className="mt-3 h-2.5 w-full overflow-hidden rounded-full bg-blue-100">
               <div
                 className="h-full rounded-full bg-blue-600 transition-all"
                 style={{
-                  width: `${pct(
-                    consumedMacros.proteinG,
-                    targetMacros.proteinG
-                  )}%`,
+                  width: `${pct(consumedMacros.proteinG, targetMacros.proteinG)}%`,
                 }}
               />
             </div>
@@ -329,19 +280,13 @@ export const NutritionDashboard: React.FC = () => {
           <div className="rounded-2xl bg-emerald-50/50 p-4 ring-1 ring-emerald-100">
             <div className="flex items-center justify-between text-xs font-bold text-emerald-800">
               <span>Carbohidratos</span>
-              <span>
-                {remainingVector.C >= 0
-                  ? `Faltan ${remainingVector.C}g`
-                  : 'Listo'}
-              </span>
+              <span>{remainingVector.C >= 0 ? `Faltan ${remainingVector.C}g` : 'Listo'}</span>
             </div>
             <div className="mt-1.5 flex items-baseline gap-1.5">
               <span className="text-2xl font-extrabold text-slate-900">
                 {consumedMacros.carbsG}g
               </span>
-              <span className="text-xs text-slate-500">
-                / {targetMacros.carbsG}g
-              </span>
+              <span className="text-xs text-slate-500">/ {targetMacros.carbsG}g</span>
             </div>
             <div className="mt-3 h-2.5 w-full overflow-hidden rounded-full bg-emerald-100">
               <div
@@ -356,19 +301,11 @@ export const NutritionDashboard: React.FC = () => {
           <div className="rounded-2xl bg-amber-50/60 p-4 ring-1 ring-amber-100">
             <div className="flex items-center justify-between text-xs font-bold text-amber-900">
               <span>Grasas</span>
-              <span>
-                {remainingVector.G >= 0
-                  ? `Faltan ${remainingVector.G}g`
-                  : 'Listo'}
-              </span>
+              <span>{remainingVector.G >= 0 ? `Faltan ${remainingVector.G}g` : 'Listo'}</span>
             </div>
             <div className="mt-1.5 flex items-baseline gap-1.5">
-              <span className="text-2xl font-extrabold text-slate-900">
-                {consumedMacros.fatG}g
-              </span>
-              <span className="text-xs text-slate-500">
-                / {targetMacros.fatG}g
-              </span>
+              <span className="text-2xl font-extrabold text-slate-900">{consumedMacros.fatG}g</span>
+              <span className="text-xs text-slate-500">/ {targetMacros.fatG}g</span>
             </div>
             <div className="mt-3 h-2.5 w-full overflow-hidden rounded-full bg-amber-100">
               <div
@@ -391,9 +328,7 @@ export const NutritionDashboard: React.FC = () => {
           {/* 1. Añadir Alimento */}
           <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-xs">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-lg font-bold text-slate-900">
-                1. Agregar una comida
-              </h2>
+              <h2 className="text-lg font-bold text-slate-900">1. Agregar una comida</h2>
               <div className="flex items-center gap-2 text-xs">
                 <span className="font-semibold text-slate-500">Gramos:</span>
                 <input
@@ -464,15 +399,33 @@ export const NutritionDashboard: React.FC = () => {
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
-                  if (!customFoodName.trim() || customKcal100 === '') return;
+                  if (
+                    !customFoodName.trim() ||
+                    [
+                      customKcal100,
+                      customProtein100,
+                      customCarbs100,
+                      customFat100,
+                      customFiber100,
+                    ].some(
+                      (value) => value === '' || !Number.isFinite(value) || Number(value) < 0,
+                    ) ||
+                    !Number.isFinite(customServingGrams) ||
+                    customServingGrams <= 0
+                  ) {
+                    setFoodSearchMessage(
+                      'Completa todos los nutrientes con datos de la etiqueta; usa cero solo cuando el valor sea cero.',
+                    );
+                    return;
+                  }
                   const newFood: FoodItem = {
-                    id: `custom-${Date.now()}`,
+                    id: `custom-${generateUuid()}`,
                     name: customFoodName.trim(),
                     kcalPer100g: Number(customKcal100) || 0,
                     proteinPer100g: Number(customProtein100) || 0,
                     carbsPer100g: Number(customCarbs100) || 0,
                     fatPer100g: Number(customFat100) || 0,
-                    fiberPer100g: 0,
+                    fiberPer100g: Number(customFiber100),
                     defaultServingName: `Porción ${customServingGrams}g`,
                     defaultServingGrams: customServingGrams || 100,
                     isCustom: true,
@@ -481,7 +434,7 @@ export const NutritionDashboard: React.FC = () => {
                   const createdFood = addCustomFood(newFood);
                   const preview = calculateFoodItemMacros(
                     createdFood,
-                    createdFood.defaultServingGrams
+                    createdFood.defaultServingGrams,
                   );
                   addTimelineLog({
                     date: selectedDate,
@@ -496,6 +449,7 @@ export const NutritionDashboard: React.FC = () => {
                   setCustomProtein100('');
                   setCustomCarbs100('');
                   setCustomFat100('');
+                  setCustomFiber100('');
                   setIsCustomFoodOpen(false);
                 }}
                 className="mt-3 space-y-3 rounded-2xl border border-emerald-200 bg-emerald-50/40 p-4"
@@ -523,9 +477,7 @@ export const NutritionDashboard: React.FC = () => {
                     type="number"
                     min={5}
                     value={customServingGrams}
-                    onChange={(e) =>
-                      setCustomServingGrams(Number(e.target.value))
-                    }
+                    onChange={(e) => setCustomServingGrams(Number(e.target.value))}
                     placeholder="Porción (g)"
                     title="Gramos por porción"
                     className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-900"
@@ -539,9 +491,7 @@ export const NutritionDashboard: React.FC = () => {
                     step="any"
                     value={customKcal100}
                     onChange={(e) =>
-                      setCustomKcal100(
-                        e.target.value === '' ? '' : Number(e.target.value)
-                      )
+                      setCustomKcal100(e.target.value === '' ? '' : Number(e.target.value))
                     }
                     placeholder="Kcal / 100g"
                     className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-900"
@@ -552,9 +502,7 @@ export const NutritionDashboard: React.FC = () => {
                     step="any"
                     value={customProtein100}
                     onChange={(e) =>
-                      setCustomProtein100(
-                        e.target.value === '' ? '' : Number(e.target.value)
-                      )
+                      setCustomProtein100(e.target.value === '' ? '' : Number(e.target.value))
                     }
                     placeholder="Proteína (g)"
                     className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-900"
@@ -565,9 +513,7 @@ export const NutritionDashboard: React.FC = () => {
                     step="any"
                     value={customCarbs100}
                     onChange={(e) =>
-                      setCustomCarbs100(
-                        e.target.value === '' ? '' : Number(e.target.value)
-                      )
+                      setCustomCarbs100(e.target.value === '' ? '' : Number(e.target.value))
                     }
                     placeholder="Carbos (g)"
                     className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-900"
@@ -578,12 +524,23 @@ export const NutritionDashboard: React.FC = () => {
                     step="any"
                     value={customFat100}
                     onChange={(e) =>
-                      setCustomFat100(
-                        e.target.value === '' ? '' : Number(e.target.value)
-                      )
+                      setCustomFat100(e.target.value === '' ? '' : Number(e.target.value))
                     }
                     placeholder="Grasas (g)"
                     className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-900"
+                  />
+                  <input
+                    aria-label="Fibra por 100 g"
+                    type="number"
+                    required
+                    min={0}
+                    step="any"
+                    value={customFiber100}
+                    onChange={(e) =>
+                      setCustomFiber100(e.target.value === '' ? '' : Number(e.target.value))
+                    }
+                    placeholder="Fibra (g)"
+                    className="rounded-xl border bg-white px-3 py-2 text-xs"
                   />
                 </div>
                 <button
@@ -598,14 +555,8 @@ export const NutritionDashboard: React.FC = () => {
             {/* Lista de Alimentos */}
             <div className="mt-4 space-y-2">
               {[...offResults, ...filteredLocalFoods].map((f) => {
-                const defaultPreview = calculateFoodItemMacros(
-                  f,
-                  f.defaultServingGrams
-                );
-                const customPreview = calculateFoodItemMacros(
-                  f,
-                  selectedFoodGrams
-                );
+                const defaultPreview = calculateFoodItemMacros(f, f.defaultServingGrams);
+                const customPreview = calculateFoodItemMacros(f, selectedFoodGrams);
 
                 return (
                   <div
@@ -613,15 +564,11 @@ export const NutritionDashboard: React.FC = () => {
                     className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50/70 px-4 py-3 text-sm transition hover:border-slate-200 hover:bg-white"
                   >
                     <div className="min-w-0 flex-1">
-                      <div className="truncate font-bold text-slate-900">
-                        {f.name}
-                      </div>
+                      <div className="truncate font-bold text-slate-900">{f.name}</div>
                       <div className="text-xs text-slate-500">
                         {f.defaultServingName} ({f.defaultServingGrams}g) ·{' '}
-                        <strong className="text-slate-700">
-                          {defaultPreview.kcal} kcal
-                        </strong>{' '}
-                        · {defaultPreview.proteinG}g proteína
+                        <strong className="text-slate-700">{defaultPreview.kcal} kcal</strong> ·{' '}
+                        {defaultPreview.proteinG}g proteína
                       </div>
                     </div>
 
@@ -629,9 +576,7 @@ export const NutritionDashboard: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => {
-                          const savedFood = !foodsMap[f.id]
-                            ? addCustomFood(f)
-                            : f;
+                          const savedFood = !foodsMap[f.id] ? addCustomFood(f) : f;
                           addTimelineLog({
                             date: selectedDate,
                             hour: activeHourToLog,
@@ -650,9 +595,7 @@ export const NutritionDashboard: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => {
-                            const savedFood = !foodsMap[f.id]
-                              ? addCustomFood(f)
-                              : f;
+                            const savedFood = !foodsMap[f.id] ? addCustomFood(f) : f;
                             addTimelineLog({
                               date: selectedDate,
                               hour: activeHourToLog,
@@ -679,9 +622,7 @@ export const NutritionDashboard: React.FC = () => {
             <div className="mb-4 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <Clock className="h-5 w-5 text-emerald-600" />
-                <h2 className="text-lg font-bold text-slate-900">
-                  2. Lo que registraste hoy
-                </h2>
+                <h2 className="text-lg font-bold text-slate-900">2. Lo que registraste hoy</h2>
               </div>
               <span className="text-xs font-semibold text-slate-500">
                 {dayLogs.length} alimentos
@@ -696,6 +637,7 @@ export const NutritionDashboard: React.FC = () => {
                 <div className="flex items-center gap-2">
                   <input
                     type="date"
+                    aria-label="Fecha de comidas"
                     value={targetPasteDate}
                     onChange={(e) => setTargetPasteDate(e.target.value)}
                     className="rounded-xl border border-blue-200 bg-white px-2.5 py-1 text-slate-800"
@@ -732,10 +674,7 @@ export const NutritionDashboard: React.FC = () => {
               <div className="space-y-4">
                 {loggedHours.map((hour) => {
                   const logsInHour = dayLogs.filter((l) => l.hour === hour);
-                  const hourKcal = logsInHour.reduce(
-                    (s, i) => s + i.calculatedMacros.kcal,
-                    0
-                  );
+                  const hourKcal = logsInHour.reduce((s, i) => s + i.calculatedMacros.kcal, 0);
 
                   return (
                     <div
@@ -746,9 +685,7 @@ export const NutritionDashboard: React.FC = () => {
                         <span className="font-bold text-slate-800">
                           {getHourFriendlyLabel(hour)} ({String(hour).padStart(2, '0')}:00)
                         </span>
-                        <span className="font-bold text-slate-600">
-                          {hourKcal} kcal
-                        </span>
+                        <span className="font-bold text-slate-600">{hourKcal} kcal</span>
                       </div>
 
                       <div className="space-y-2">
@@ -757,9 +694,7 @@ export const NutritionDashboard: React.FC = () => {
                             log.customLabel ||
                             (log.foodId && foodsMap[log.foodId]?.name) ||
                             'Comida';
-                          const checked = selectedLogIdsForPaste.includes(
-                            log.id
-                          );
+                          const checked = selectedLogIdsForPaste.includes(log.id);
 
                           return (
                             <div
@@ -774,7 +709,7 @@ export const NutritionDashboard: React.FC = () => {
                                     setSelectedLogIdsForPaste((prev) =>
                                       checked
                                         ? prev.filter((id) => id !== log.id)
-                                        : [...prev, log.id]
+                                        : [...prev, log.id],
                                     )
                                   }
                                   className="h-4 w-4 rounded border-slate-300 text-blue-600"
@@ -797,10 +732,7 @@ export const NutritionDashboard: React.FC = () => {
                                   step={5}
                                   value={log.gramsConsumed}
                                   onChange={(e) =>
-                                    updateTimelineLogGrams(
-                                      log.id,
-                                      Number(e.target.value)
-                                    )
+                                    updateTimelineLogGrams(log.id, Number(e.target.value))
                                   }
                                   className="w-16 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-center text-xs font-bold text-slate-900"
                                 />
@@ -835,9 +767,7 @@ export const NutritionDashboard: React.FC = () => {
                 <Sparkles className="h-5 w-5" />
               </div>
               <div>
-                <h2 className="text-lg font-bold text-slate-900">
-                  Ideas para completar tu día
-                </h2>
+                <h2 className="text-lg font-bold text-slate-900">Ideas para completar tu día</h2>
                 <p className="text-xs text-slate-500">
                   Porciones exactas según lo que te falta comer hoy
                 </p>
@@ -861,9 +791,7 @@ export const NutritionDashboard: React.FC = () => {
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <span className="text-sm font-bold text-slate-900">
-                          {sug.title}
-                        </span>
+                        <span className="text-sm font-bold text-slate-900">{sug.title}</span>
                         <div className="mt-1 text-xs font-medium text-slate-600">
                           {sug.totalMacros.kcal} kcal ·{' '}
                           <span className="text-blue-700">
@@ -904,12 +832,8 @@ export const NutritionDashboard: React.FC = () => {
                 <ChefHat className="h-5 w-5" />
               </div>
               <div>
-                <h2 className="text-lg font-bold text-slate-900">
-                  Recetas listas para ti
-                </h2>
-                <p className="text-xs text-slate-500">
-                  Cantidades adaptadas a tus calorías de hoy
-                </p>
+                <h2 className="text-lg font-bold text-slate-900">Recetas listas para ti</h2>
+                <p className="text-xs text-slate-500">Cantidades adaptadas a tus calorías de hoy</p>
               </div>
             </div>
 
@@ -921,12 +845,9 @@ export const NutritionDashboard: React.FC = () => {
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <span className="text-sm font-bold text-slate-900">
-                        {sr.recipe.name}
-                      </span>
+                      <span className="text-sm font-bold text-slate-900">{sr.recipe.name}</span>
                       <div className="mt-0.5 text-xs font-semibold text-slate-600">
-                        {sr.scaledTotalMacros.kcal} kcal ·{' '}
-                        {sr.scaledTotalMacros.proteinG}g proteína
+                        {sr.scaledTotalMacros.kcal} kcal · {sr.scaledTotalMacros.proteinG}g proteína
                       </div>
                     </div>
                     <button

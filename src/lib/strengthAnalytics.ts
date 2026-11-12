@@ -9,6 +9,7 @@ import type {
   WorkoutSetLog,
   WorkoutSetType,
 } from '../types/nutrition';
+import { addDays, isCivilDate, localDate } from './dates';
 
 // ============================================================================
 // 1. ESTIMACIÓN DE 1RM EN TIEMPO REAL (BRZYCKI <= 10 REPS / EPLEY > 10 REPS)
@@ -25,9 +26,15 @@ import type {
 export function calculateEstimated1RM(
   weightKg: number,
   reps: number,
-  setType: WorkoutSetType = 'working'
+  setType: WorkoutSetType = 'working',
 ): number {
-  if (setType === 'warmup' || !Number.isFinite(weightKg) || !Number.isFinite(reps) || weightKg <= 0 || reps <= 0) {
+  if (
+    setType === 'warmup' ||
+    !Number.isFinite(weightKg) ||
+    !Number.isFinite(reps) ||
+    weightKg <= 0 ||
+    reps <= 0
+  ) {
     return 0;
   }
 
@@ -68,7 +75,7 @@ export function calculateSessionTonnageKg(sets: WorkoutSetLog[]): number {
 export function getHistoricalExerciseBest(
   exerciseId: string,
   sessions: WorkoutSession[],
-  excludeSessionId?: string
+  excludeSessionId?: string,
 ): { maxWeightKg: number; max1RMKg: number } {
   let maxWeightKg = 0;
   let max1RMKg = 0;
@@ -76,11 +83,7 @@ export function getHistoricalExerciseBest(
   for (const session of sessions) {
     if (excludeSessionId && session.id === excludeSessionId) continue;
     for (const set of session.sets) {
-      if (
-        set.exerciseId === exerciseId &&
-        set.isCompleted &&
-        set.setType !== 'warmup'
-      ) {
+      if (set.exerciseId === exerciseId && set.isCompleted && set.setType !== 'warmup') {
         if (set.weightKg > maxWeightKg) {
           maxWeightKg = set.weightKg;
         }
@@ -161,19 +164,15 @@ export function getDoubleProgressionSuggestion(params: {
   const [minReps, maxReps] = targetRepRange;
 
   // Ordenar sesiones de la más reciente a la más antigua
-  const sortedSessions = [...previousSessions].sort((a, b) =>
-    b.date.localeCompare(a.date)
-  );
+  const sortedSessions = [...previousSessions].sort((a, b) => b.date.localeCompare(a.date));
 
   const lastSessionWithExercise = sortedSessions.find((session) =>
     session.sets.some(
-      (s) => s.exerciseId === exerciseId && s.isCompleted && s.setType !== 'warmup'
-    )
+      (s) => s.exerciseId === exerciseId && s.isCompleted && s.setType !== 'warmup',
+    ),
   );
 
-  const incrementKg = getRecommendedLoadIncrementKg(
-    catalogItem?.equipment ?? 'Barra'
-  );
+  const incrementKg = getRecommendedLoadIncrementKg(catalogItem?.equipment ?? 'Barra');
 
   if (!lastSessionWithExercise) {
     return {
@@ -196,24 +195,25 @@ export function getDoubleProgressionSuggestion(params: {
   }
 
   const lastWorkingSets = lastSessionWithExercise.sets.filter(
-    (s) => s.exerciseId === exerciseId && s.isCompleted && s.setType === 'working'
+    (s) => s.exerciseId === exerciseId && s.isCompleted && s.setType === 'working',
   );
 
   const referenceSets =
     lastWorkingSets.length > 0
       ? lastWorkingSets
       : lastSessionWithExercise.sets.filter(
-          (s) => s.exerciseId === exerciseId && s.isCompleted && s.setType !== 'warmup'
+          (s) => s.exerciseId === exerciseId && s.isCompleted && s.setType !== 'warmup',
         );
 
   // Verificar si TODAS las series de trabajo alcanzaron o superaron el límite superior del targetRepRange
   const allWorkingSetsHitTopOfRange =
-    lastWorkingSets.length >= targetSets && lastWorkingSets.every((s) => s.reps >= maxReps && Number.isFinite(s.weightKg) && s.weightKg > 0);
+    lastWorkingSets.length >= targetSets &&
+    lastWorkingSets.every(
+      (s) => s.reps >= maxReps && Number.isFinite(s.weightKg) && s.weightKg > 0,
+    );
 
   const topWorkingWeight =
-    referenceSets.length > 0
-      ? Math.max(...referenceSets.map((s) => s.weightKg))
-      : 40;
+    referenceSets.length > 0 ? Math.max(...referenceSets.map((s) => s.weightKg)) : 40;
 
   if (progressionRule !== 'none' && allWorkingSetsHitTopOfRange) {
     const nextWeight = Number((topWorkingWeight + incrementKg).toFixed(1));
@@ -309,7 +309,8 @@ export function classifyHypertrophyVolumeZone(effectiveSets: number): {
     return {
       zone: 'mrv_risk',
       zoneLabel: 'MRV (>22 · Riesgo Fatiga)',
-      zoneDescription: 'Supera el Volumen Máximo Recuperable (>22 series/sem). Vigila recuperación articular.',
+      zoneDescription:
+        'Supera el Volumen Máximo Recuperable (>22 series/sem). Vigila recuperación articular.',
     };
   }
   if (effectiveSets >= 12) {
@@ -330,7 +331,8 @@ export function classifyHypertrophyVolumeZone(effectiveSets: number): {
     return {
       zone: 'mv',
       zoneLabel: 'MV (4-6 · Mantenimiento)',
-      zoneDescription: 'Volumen de Mantenimiento: preserva masa contráctil (útil en déficit o descarga).',
+      zoneDescription:
+        'Volumen de Mantenimiento: preserva masa contráctil (útil en déficit o descarga).',
     };
   }
   return {
@@ -354,28 +356,22 @@ export function calculateWeeklyMuscleVolume(params: {
   const { sessions, catalog, referenceDateStr, daysWindow = 7 } = params;
   const catalogMap = new Map(catalog.map((c) => [c.id, c]));
 
-  const refDate = referenceDateStr ? new Date(referenceDateStr) : new Date();
-  const cutoffTime = refDate.getTime() - (daysWindow - 1) * 24 * 60 * 60 * 1000;
+  const referenceDate = referenceDateStr ?? localDate();
+  if (!Number.isInteger(daysWindow) || daysWindow < 1) throw new RangeError('Ventana inválida.');
+  const cutoffDate = addDays(referenceDate, -(daysWindow - 1));
 
-  const statsMap = new Map<
-    MuscleGroupEs,
-    { direct: number; fractional: number }
-  >();
+  const statsMap = new Map<MuscleGroupEs, { direct: number; fractional: number }>();
   for (const m of ALL_MUSCLE_GROUPS_ES) {
     statsMap.set(m, { direct: 0, fractional: 0 });
   }
 
   for (const session of sessions) {
-    const sessionTime = new Date(session.date).getTime();
-    if (sessionTime < cutoffTime || sessionTime > refDate.getTime() + 86400000) {
+    if (!isCivilDate(session.date) || session.date < cutoffDate || session.date > referenceDate) {
       continue;
     }
 
     for (const set of session.sets) {
-      if (
-        !set.isCompleted ||
-        (set.setType !== 'working' && set.setType !== 'failure')
-      ) {
+      if (!set.isCompleted || (set.setType !== 'working' && set.setType !== 'failure')) {
         continue;
       }
 
@@ -440,21 +436,18 @@ export function calculatePeriWorkoutNutrition(params: {
   const { date, bodyweightKg, dailyTargetCarbsG, sessions } = params;
   const todaysSessions = sessions.filter((s) => s.date === date);
   const hasWorkoutToday = todaysSessions.length > 0;
-  const totalVolumeKgToday = todaysSessions.reduce(
-    (sum, s) => sum + s.totalVolumeKg,
-    0
-  );
+  const totalVolumeKgToday = todaysSessions.reduce((sum, s) => sum + s.totalVolumeKg, 0);
 
   // Mínimo 0.4 g/kg de proteína post-entreno (umbral de leucina y síntesis proteica miofibrilar)
   const minPostWorkoutProteinG = Math.max(25, Math.round(bodyweightKg * 0.4));
   // Distribución peri-entreno de carbohidratos (pre ~25%, post ~35% de la cuota diaria o ~1g/kg)
   const recommendedPreWorkoutCarbsG = Math.max(
     30,
-    Math.round(Math.min(dailyTargetCarbsG * 0.25, bodyweightKg * 1.0))
+    Math.round(Math.min(dailyTargetCarbsG * 0.25, bodyweightKg * 1.0)),
   );
   const recommendedPostWorkoutCarbsG = Math.max(
     40,
-    Math.round(Math.min(dailyTargetCarbsG * 0.35, bodyweightKg * 1.2))
+    Math.round(Math.min(dailyTargetCarbsG * 0.35, bodyweightKg * 1.2)),
   );
 
   if (!hasWorkoutToday) {
@@ -521,11 +514,7 @@ export function evaluateStrengthBodyweightSynergy(params: {
     let best1RM = 0;
     let bestWeight = 0;
     for (const set of session.sets) {
-      if (
-        set.exerciseId === exerciseId &&
-        set.isCompleted &&
-        set.setType !== 'warmup'
-      ) {
+      if (set.exerciseId === exerciseId && set.isCompleted && set.setType !== 'warmup') {
         const rm =
           set.estimated1RM > 0
             ? set.estimated1RM
@@ -542,9 +531,9 @@ export function evaluateStrengthBodyweightSynergy(params: {
     }
   }
 
-  const allDates = Array.from(
-    new Set([...bioByDate.keys(), ...oneRmByDate.keys()])
-  ).sort((a, b) => a.localeCompare(b));
+  const allDates = Array.from(new Set([...bioByDate.keys(), ...oneRmByDate.keys()])).sort((a, b) =>
+    a.localeCompare(b),
+  );
 
   let lastKnownTrend: number | null = null;
   let lastKnown1RM: number | null = null;
@@ -567,11 +556,7 @@ export function evaluateStrengthBodyweightSynergy(params: {
   const validBio = [...biometricLogs].sort((a, b) => a.date.localeCompare(b.date));
   const weightTrendDeltaKg =
     validBio.length >= 2
-      ? Number(
-          (
-            validBio[validBio.length - 1].trendWeightKg - validBio[0].trendWeightKg
-          ).toFixed(2)
-        )
+      ? Number((validBio[validBio.length - 1].trendWeightKg - validBio[0].trendWeightKg).toFixed(2))
       : 0;
 
   const valid1RMs = Array.from(oneRmByDate.entries())
@@ -579,9 +564,7 @@ export function evaluateStrengthBodyweightSynergy(params: {
     .map((e) => e[1].best1RM);
 
   const oneRmDeltaKg =
-    valid1RMs.length >= 2
-      ? Number((valid1RMs[valid1RMs.length - 1] - valid1RMs[0]).toFixed(1))
-      : 0;
+    valid1RMs.length >= 2 ? Number((valid1RMs[valid1RMs.length - 1] - valid1RMs[0]).toFixed(1)) : 0;
   const oneRmDeltaPercent =
     valid1RMs.length >= 2 && valid1RMs[0] > 0
       ? Number(((oneRmDeltaKg / valid1RMs[0]) * 100).toFixed(1))

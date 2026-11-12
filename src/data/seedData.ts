@@ -1,8 +1,5 @@
-import type {
-  FoodItem,
-  Recipe,
-} from '../types/nutrition';
 import { calculateFoodItemMacros } from '../lib/metabolism';
+import type { FoodItem, Recipe } from '../types/nutrition';
 
 // ============================================================================
 // CATÁLOGO SEMILLA DE ALIMENTOS BASE (USDA / OPEN FOOD FACTS VERIFICADOS)
@@ -374,10 +371,7 @@ export const INITIAL_FOOD_ITEMS: FoodItem[] = [
 ];
 
 // Helper interno para calcular totalMacros exactos de cada receta base
-function buildSeedRecipe(
-  recipeData: Omit<Recipe, 'totalMacros'>,
-  foods: FoodItem[]
-): Recipe {
+function buildSeedRecipe(recipeData: Omit<Recipe, 'totalMacros'>, foods: FoodItem[]): Recipe {
   const foodMap = Object.fromEntries(foods.map((f) => [f.id, f]));
   let kcal = 0;
   let proteinG = 0;
@@ -436,7 +430,7 @@ export const INITIAL_RECIPES: Recipe[] = [
         'Coronar con láminas de palta Hass fresca.',
       ],
     },
-    INITIAL_FOOD_ITEMS
+    INITIAL_FOOD_ITEMS,
   ),
   buildSeedRecipe(
     {
@@ -457,7 +451,7 @@ export const INITIAL_RECIPES: Recipe[] = [
         'Revolver suavemente hasta lograr textura cremosa.',
       ],
     },
-    INITIAL_FOOD_ITEMS
+    INITIAL_FOOD_ITEMS,
   ),
   buildSeedRecipe(
     {
@@ -479,7 +473,7 @@ export const INITIAL_RECIPES: Recipe[] = [
         'Añadir rodajas de banana, arándanos y la mantequilla de maní natural en la superficie.',
       ],
     },
-    INITIAL_FOOD_ITEMS
+    INITIAL_FOOD_ITEMS,
   ),
   buildSeedRecipe(
     {
@@ -499,6 +493,6 @@ export const INITIAL_RECIPES: Recipe[] = [
         'Intercalar capas con los arándanos frescos y las almendras fileteadas.',
       ],
     },
-    INITIAL_FOOD_ITEMS
+    INITIAL_FOOD_ITEMS,
   ),
 ];

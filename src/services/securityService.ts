@@ -20,7 +20,9 @@ export interface PasswordValidationResult {
 export function sanitizeText(input: string, maxLength = 120): string {
   return input
     .replace(/[<>]/g, '')
-    .replace(/[\u0000-\u001F\u007F]/g, '')
+    .split('')
+    .filter((char) => char.charCodeAt(0) >= 32 && char.charCodeAt(0) !== 127)
+    .join('')
     .trim()
     .slice(0, maxLength);
 }
@@ -79,10 +81,7 @@ export function mapSafeAuthError(error: unknown): string {
   const rawMessage =
     error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
 
-  if (
-    rawMessage.includes('invalid login credentials') ||
-    rawMessage.includes('credenciales')
-  ) {
+  if (rawMessage.includes('invalid login credentials') || rawMessage.includes('credenciales')) {
     return 'El correo o la contraseña no son correctos. Verifica tus datos.';
   }
   if (rawMessage.includes('already registered') || rawMessage.includes('ya existe')) {
@@ -111,12 +110,28 @@ export async function clearSensitiveUserStorage(userId: string): Promise<void> {
     'fitnutricion-offline-store-v2',
   ];
   let failed = false;
+  try {
+    if (typeof localStorage !== 'undefined')
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const key = localStorage.key(i);
+        if (key?.startsWith(`fitnutricion-sync-inbox-v1:${userId}:`)) localStorage.removeItem(key);
+      }
+  } catch {
+    failed = true;
+  }
   // Attempt both stores independently: failure in one must not skip the other.
   for (const key of keys) {
-    try { if (typeof localStorage !== 'undefined') localStorage.removeItem(key); }
-    catch { failed = true; }
-    try { if (typeof indexedDB !== 'undefined') await del(key); }
-    catch { failed = true; }
+    try {
+      if (typeof localStorage !== 'undefined') localStorage.removeItem(key);
+    } catch {
+      failed = true;
+    }
+    try {
+      if (typeof indexedDB !== 'undefined') await del(key);
+    } catch {
+      failed = true;
+    }
   }
-  if (failed) throw new Error('No se pudieron borrar todas las copias locales. Reintenta antes de salir.');
+  if (failed)
+    throw new Error('No se pudieron borrar todas las copias locales. Reintenta antes de salir.');
 }

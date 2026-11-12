@@ -91,12 +91,7 @@ export interface TimelineLog {
 }
 
 export type RecipeProfileTag =
-  | 'high-protein'
-  | 'low-cal-volume'
-  | 'energy-dense'
-  | 'balanced'
-  | 'post-workout'
-  | 'quick';
+  'high-protein' | 'low-cal-volume' | 'energy-dense' | 'balanced' | 'post-workout' | 'quick';
 
 export interface RecipeIngredient {
   foodId: string;
@@ -161,12 +156,7 @@ export type EquipmentEs =
   | 'Barra Z'
   | 'Barra Hexagonal';
 
-export type ExerciseCategoryEs =
-  | 'fuerza'
-  | 'hipertrofia'
-  | 'calistenia'
-  | 'cardio'
-  | 'movilidad';
+export type ExerciseCategoryEs = 'fuerza' | 'hipertrofia' | 'calistenia' | 'cardio' | 'movilidad';
 
 export interface ExerciseCatalogItem {
   id: string;

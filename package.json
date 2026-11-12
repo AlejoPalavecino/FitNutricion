@@ -5,11 +5,17 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
-    "lint": "eslint .",
+    "build": "tsc -b && vite build && node scripts/build-pwa.mjs",
+    "lint": "eslint src scripts tests *.ts *.mjs --no-warn-ignored",
     "preview": "vite preview",
     "test": "vitest run",
-    "ingest:opengym": "node --experimental-strip-types scripts/ingest-opengym.ts"
+    "ingest:opengym": "node --experimental-strip-types scripts/ingest-opengym.ts",
+    "format": "prettier --write src scripts tests *.ts *.mjs *.json *.md docs .github",
+    "format:check": "prettier --check src scripts tests *.ts *.mjs *.json *.md docs .github",
+    "test:e2e": "playwright test",
+    "seed:generate": "node scripts/generate-seed.mjs",
+    "typecheck": "tsc -b",
+    "audit": "npm audit --audit-level=high"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.1",
@@ -21,17 +27,36 @@
     "react-dom": "^19.0.0",
     "recharts": "^2.15.1",
     "tailwind-merge": "^3.0.2",
+    "zod": "4.6.7",
     "zustand": "^5.0.3"
   },
   "devDependencies": {
+    "@eslint/js": "9.39.5",
+    "@playwright/test": "1.65.0",
     "@tailwindcss/vite": "^4.0.9",
     "@types/node": "^22.13.5",
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
     "@vitejs/plugin-react": "^4.3.4",
+    "acorn": "8.19.0",
+    "eslint": "9.39.5",
+    "eslint-plugin-jsx-a11y": "6.10.2",
+    "eslint-plugin-react-hooks": "5.2.0",
+    "fake-indexeddb": "6.2.8",
+    "globals": "16.5.0",
+    "prettier": "3.10.1",
     "tailwindcss": "^4.0.9",
     "typescript": "~5.7.2",
+    "typescript-eslint": "8.72.2",
     "vite": "^6.2.0",
-    "vitest": "^3.0.7"
+    "vitest": "5.1.0"
+  },
+  "overrides": {
+    "@typescript-eslint/typescript-estree": {
+      "minimatch": "11.0.1"
+    }
+  },
+  "engines": {
+    "node": ">=22.12.0"
   }
 }

@@ -29,7 +29,7 @@ describe('securityService', () => {
   it('oculta errores internos de base de datos o red con mensajes seguros', () => {
     const rawDbError = new Error('Postgres error 23505: invalid login credentials');
     expect(mapSafeAuthError(rawDbError)).toBe(
-      'El correo o la contraseña no son correctos. Verifica tus datos.'
+      'El correo o la contraseña no son correctos. Verifica tus datos.',
     );
   });
 });

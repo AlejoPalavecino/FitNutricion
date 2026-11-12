@@ -1,12 +1,86 @@
-import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest';
-vi.mock('../lib/storage',()=>({offlineFirstStorage:{getItem:vi.fn().mockResolvedValue(null),setItem:vi.fn().mockResolvedValue(undefined),removeItem:vi.fn().mockResolvedValue(undefined)}}));
-vi.mock('../services/cloudSyncService',async original=>{const actual=await original<typeof import('../services/cloudSyncService')>();return {...actual,cloudSyncService:{connect:vi.fn().mockResolvedValue(undefined),capture:vi.fn(),disconnect:vi.fn()}};});
-import {useNutritionStore} from './useNutritionStore';import {addDays} from '../lib/dates';
-const user={id:'11111111-1111-4111-8111-111111111111',email:'test@example.test',fullName:'Test',authMode:'local_vault' as const};
-describe('weekly check-in and complete-day confirmation',()=>{
- beforeEach(async()=>{vi.useFakeTimers();vi.setSystemTime(new Date('2026-11-12T12:00:00Z'));useNutritionStore.getState().clearActiveSessionState();await useNutritionStore.getState().initializeForUser(user);useNutritionStore.getState().completeOnboarding({birthDate:'1990-01-01',sex:'male',heightCm:180,weightKg:80,initialPal:1.55,trainingExperience:'intermediate',selectedPhase:'maintenance'});const base=useNutritionStore.getState().biometricLogs[0],dates=Array.from({length:21},(_,i)=>addDays('2026-11-12',i-20));useNutritionStore.setState({biometricLogs:dates.map((date,i)=>({...base,id:`bio${i}`,date,scaleWeightKg:82-i*.05,trendWeightKg:82-i*.05})),timelineLogs:dates.map((date,i)=>({id:`log${i}`,date,hour:12,gramsConsumed:100,calculatedMacros:{kcal:2400,proteinG:150,carbsG:250,fatG:80,fiberG:30}})),completedNutritionDates:dates});});
- afterEach(()=>vi.useRealTimers());
- it('applies once weekly without compounding the damping limit',()=>{const first=useNutritionStore.getState().executeWeeklyMetabolicCheckin(true);expect(first).not.toBeNull();const tdee=useNutritionStore.getState().userProfile?.activeTdee,second=useNutritionStore.getState().executeWeeklyMetabolicCheckin(true);expect(second?.id).toBe(first?.id);expect(useNutritionStore.getState().metabolicCheckins).toHaveLength(1);expect(useNutritionStore.getState().userProfile?.activeTdee).toBe(tdee);});
- it('rejects an adjustment with insufficient complete days',()=>{useNutritionStore.setState({completedNutritionDates:[]});expect(useNutritionStore.getState().executeWeeklyMetabolicCheckin(true)).toBeNull();});
- it('invalidates completeness when food changes and rejects future confirmation',()=>{const date='2026-11-12';useNutritionStore.getState().updateTimelineLogGrams('log20',150);expect(useNutritionStore.getState().completedNutritionDates).not.toContain(date);useNutritionStore.getState().markNutritionDayComplete(date,true);expect(useNutritionStore.getState().completedNutritionDates).toContain(date);useNutritionStore.getState().markNutritionDayComplete('2026-11-13',true);expect(useNutritionStore.getState().completedNutritionDates).not.toContain('2026-11-13');});
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { addDays } from '../lib/dates';
+import { useNutritionStore } from './useNutritionStore';
+vi.mock('../lib/storage', () => ({
+  offlineFirstStorage: {
+    getItem: vi.fn().mockResolvedValue(null),
+    setItem: vi.fn().mockResolvedValue(undefined),
+    removeItem: vi.fn().mockResolvedValue(undefined),
+  },
+}));
+vi.mock('../services/cloudSyncService', async (original) => {
+  const actual = await original<typeof import('../services/cloudSyncService')>();
+  return {
+    ...actual,
+    cloudSyncService: {
+      connect: vi.fn().mockResolvedValue(undefined),
+      capture: vi.fn(),
+      disconnect: vi.fn(),
+    },
+  };
+});
+const user = {
+  id: '11111111-1111-4111-8111-111111111111',
+  email: 'test@example.test',
+  fullName: 'Test',
+  authMode: 'local_vault' as const,
+};
+describe('weekly check-in and complete-day confirmation', () => {
+  beforeEach(async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-11-12T12:00:00Z'));
+    useNutritionStore.getState().clearActiveSessionState();
+    await useNutritionStore.getState().initializeForUser(user);
+    useNutritionStore.getState().completeOnboarding({
+      birthDate: '1990-01-01',
+      sex: 'male',
+      heightCm: 180,
+      weightKg: 80,
+      initialPal: 1.55,
+      trainingExperience: 'intermediate',
+      selectedPhase: 'maintenance',
+    });
+    const base = useNutritionStore.getState().biometricLogs[0],
+      dates = Array.from({ length: 21 }, (_, i) => addDays('2026-11-12', i - 20));
+    useNutritionStore.setState({
+      biometricLogs: dates.map((date, i) => ({
+        ...base,
+        id: `bio${i}`,
+        date,
+        scaleWeightKg: 82 - i * 0.05,
+        trendWeightKg: 82 - i * 0.05,
+      })),
+      timelineLogs: dates.map((date, i) => ({
+        id: `log${i}`,
+        date,
+        hour: 12,
+        gramsConsumed: 100,
+        calculatedMacros: { kcal: 2400, proteinG: 150, carbsG: 250, fatG: 80, fiberG: 30 },
+      })),
+      completedNutritionDates: dates,
+    });
+  });
+  afterEach(() => vi.useRealTimers());
+  it('applies once weekly without compounding the damping limit', () => {
+    const first = useNutritionStore.getState().executeWeeklyMetabolicCheckin(true);
+    expect(first).not.toBeNull();
+    const tdee = useNutritionStore.getState().userProfile?.activeTdee,
+      second = useNutritionStore.getState().executeWeeklyMetabolicCheckin(true);
+    expect(second?.id).toBe(first?.id);
+    expect(useNutritionStore.getState().metabolicCheckins).toHaveLength(1);
+    expect(useNutritionStore.getState().userProfile?.activeTdee).toBe(tdee);
+  });
+  it('rejects an adjustment with insufficient complete days', () => {
+    useNutritionStore.setState({ completedNutritionDates: [] });
+    expect(useNutritionStore.getState().executeWeeklyMetabolicCheckin(true)).toBeNull();
+  });
+  it('invalidates completeness when food changes and rejects future confirmation', () => {
+    const date = '2026-11-12';
+    useNutritionStore.getState().updateTimelineLogGrams('log20', 150);
+    expect(useNutritionStore.getState().completedNutritionDates).not.toContain(date);
+    useNutritionStore.getState().markNutritionDayComplete(date, true);
+    expect(useNutritionStore.getState().completedNutritionDates).toContain(date);
+    useNutritionStore.getState().markNutritionDayComplete('2026-11-13', true);
+    expect(useNutritionStore.getState().completedNutritionDates).not.toContain('2026-11-13');
+  });
 });

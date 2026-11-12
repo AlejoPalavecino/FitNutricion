@@ -1,4 +1,3 @@
-import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
   ArrowRight,
@@ -12,11 +11,7 @@ import {
   Sparkles,
   Target,
 } from 'lucide-react';
-import type {
-  BiologicalSex,
-  NutritionalPhase,
-  TrainingExperience,
-} from '../../types/nutrition';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   calculateAgeFromBirthDate,
   calculateHierarchicalMacros,
@@ -24,8 +19,9 @@ import {
   evaluateAnthropometrics,
   recommendNutritionalPhase,
 } from '../../lib/metabolism';
-import { useNutritionStore } from '../../store/useNutritionStore';
 import { useAuthStore } from '../../store/useAuthStore';
+import { useNutritionStore } from '../../store/useNutritionStore';
+import type { BiologicalSex, NutritionalPhase, TrainingExperience } from '../../types/nutrition';
 
 interface OnboardingDiagnosticProps {
   onCompleted?: () => void;
@@ -55,10 +51,7 @@ const ACTIVITY_OPTIONS = [
   },
 ];
 
-const SIMPLE_PHASE_INFO: Record<
-  NutritionalPhase,
-  { title: string; desc: string }
-> = {
+const SIMPLE_PHASE_INFO: Record<NutritionalPhase, { title: string; desc: string }> = {
   cut: {
     title: 'Bajar Grasa',
     desc: 'Reduces grasa corporal cuidando tu músculo.',
@@ -91,72 +84,65 @@ export const OnboardingDiagnostic: React.FC<OnboardingDiagnosticProps> = ({
   const latestBio = biometricLogs[biometricLogs.length - 1];
 
   const [name, setName] = useState(
-    onboardingDraft?.name ||
-      existingProfile?.name ||
-      currentUser?.fullName ||
-      ''
+    onboardingDraft?.name || existingProfile?.name || currentUser?.fullName || '',
   );
   const [sex, setSex] = useState<BiologicalSex>(
-    onboardingDraft?.sex ?? existingProfile?.sex ?? 'male'
+    onboardingDraft?.sex ?? existingProfile?.sex ?? 'male',
   );
   const [birthDate, setBirthDate] = useState(
-    onboardingDraft?.birthDate || existingProfile?.birthDate || ''
+    onboardingDraft?.birthDate || existingProfile?.birthDate || '',
   );
   const [heightInput, setHeightInput] = useState<string>(
     onboardingDraft?.heightCm
       ? String(onboardingDraft.heightCm)
       : existingProfile?.heightCm
         ? String(existingProfile.heightCm)
-        : ''
+        : '',
   );
   const [weightInput, setWeightInput] = useState<string>(
     onboardingDraft?.weightKg
       ? String(onboardingDraft.weightKg)
       : latestBio?.scaleWeightKg
         ? String(latestBio.scaleWeightKg)
-        : ''
+        : '',
   );
   const [pal, setPal] = useState<number>(
-    onboardingDraft?.pal ?? existingProfile?.initialPal ?? 1.55
+    onboardingDraft?.pal ?? existingProfile?.initialPal ?? 1.55,
   );
-  const [trainingExperience, setTrainingExperience] =
-    useState<TrainingExperience>(
-      onboardingDraft?.experience ??
-        existingProfile?.trainingExperience ??
-        'novice'
-    );
+  const [trainingExperience, setTrainingExperience] = useState<TrainingExperience>(
+    onboardingDraft?.experience ?? existingProfile?.trainingExperience ?? 'novice',
+  );
 
   // Cinta métrica opcional (colapsada por defecto)
   const [useTapeMeasurements, setUseTapeMeasurements] = useState<boolean>(
     Boolean(onboardingDraft?.neckCm || onboardingDraft?.waistCm) ||
-      (latestBio ? latestBio.bfMethod === 'us_navy' : false)
+      (latestBio ? latestBio.bfMethod === 'us_navy' : false),
   );
   const [neckInput, setNeckInput] = useState<string>(
     onboardingDraft?.neckCm
       ? String(onboardingDraft.neckCm)
       : latestBio?.neckCm
         ? String(latestBio.neckCm)
-        : ''
+        : '',
   );
   const [waistInput, setWaistInput] = useState<string>(
     onboardingDraft?.waistCm
       ? String(onboardingDraft.waistCm)
       : latestBio?.waistCm
         ? String(latestBio.waistCm)
-        : ''
+        : '',
   );
   const [hipInput, setHipInput] = useState<string>(
     onboardingDraft?.hipCm
       ? String(onboardingDraft.hipCm)
       : latestBio?.hipCm
         ? String(latestBio.hipCm)
-        : ''
+        : '',
   );
 
-  const [userSelectedPhase, setUserSelectedPhase] =
-    useState<NutritionalPhase | null>(
-      onboardingDraft?.selectedPhase ?? existingProfile?.currentPhase ?? null
-    );
+  const [userSelectedPhase, setUserSelectedPhase] = useState<NutritionalPhase | null>(
+    onboardingDraft?.selectedPhase ?? existingProfile?.currentPhase ?? null,
+  );
   const [validationError, setValidationError] = useState<string | null>(null);
 
   // Sincronizar automáticamente el nombre registrado de la cuenta o del perfil guardado
@@ -214,10 +200,13 @@ export const OnboardingDiagnostic: React.FC<OnboardingDiagnosticProps> = ({
     weightKg >= 30 &&
     weightKg <= 250;
 
-  const age = useMemo(
-    () => { try { return birthDate ? calculateAgeFromBirthDate(birthDate) : null; } catch { return null; } },
-    [birthDate]
-  );
+  const age = useMemo(() => {
+    try {
+      return birthDate ? calculateAgeFromBirthDate(birthDate) : null;
+    } catch {
+      return null;
+    }
+  }, [birthDate]);
 
   const diagnostic = useMemo(() => {
     if (!isBasicDataComplete || age === null || age < 18 || age > 100) return null;
@@ -260,7 +249,7 @@ export const OnboardingDiagnostic: React.FC<OnboardingDiagnosticProps> = ({
         waistCm: useTapeMeasurements ? waistCm : undefined,
         hipCm: useTapeMeasurements && sex === 'female' ? hipCm : undefined,
       },
-      diagnostic
+      diagnostic,
     );
   }, [
     isBasicDataComplete,
@@ -279,10 +268,7 @@ export const OnboardingDiagnostic: React.FC<OnboardingDiagnosticProps> = ({
 
   const activePhase: NutritionalPhase = useMemo(() => {
     if (!phaseRecommendation) return userSelectedPhase ?? 'recomp';
-    if (
-      userSelectedPhase &&
-      phaseRecommendation.options[userSelectedPhase]?.enabled
-    ) {
+    if (userSelectedPhase && phaseRecommendation.options[userSelectedPhase]?.enabled) {
       return userSelectedPhase;
     }
     return phaseRecommendation.recommendedPhase;
@@ -319,20 +305,16 @@ export const OnboardingDiagnostic: React.FC<OnboardingDiagnosticProps> = ({
     }
     if (!birthDate || age === null || age < 18 || age > 100) {
       setValidationError(
-        'Ingresa una fecha válida. El plan automático está limitado a personas adultas de 18 a 100 años.'
+        'Ingresa una fecha válida. El plan automático está limitado a personas adultas de 18 a 100 años.',
       );
       return;
     }
     if (!Number.isFinite(heightCm) || heightCm < 120 || heightCm > 240) {
-      setValidationError(
-        'Ingresa tu altura real en centímetros (entre 120 y 240 cm).'
-      );
+      setValidationError('Ingresa tu altura real en centímetros (entre 120 y 240 cm).');
       return;
     }
     if (!Number.isFinite(weightKg) || weightKg < 30 || weightKg > 250) {
-      setValidationError(
-        'Ingresa tu peso actual real en kilogramos (entre 30 y 250 kg).'
-      );
+      setValidationError('Ingresa tu peso actual real en kilogramos (entre 30 y 250 kg).');
       return;
     }
     if (!phaseCalorieDetails) {
@@ -369,9 +351,7 @@ export const OnboardingDiagnostic: React.FC<OnboardingDiagnosticProps> = ({
             Configuración personalizada
           </span>
           <h1 className="mt-2 text-2xl font-extrabold text-slate-900 sm:text-3xl">
-            {name.trim()
-              ? `Hola, ${name.trim()} · Arma tu Plan`
-              : 'Arma tu Plan Personalizado'}
+            {name.trim() ? `Hola, ${name.trim()} · Arma tu Plan` : 'Arma tu Plan Personalizado'}
           </h1>
           <p className="mt-1 text-sm text-slate-600">
             Ingresa tus medidas reales para calcular desde cero tus calorías, proteínas y progreso.
@@ -383,9 +363,7 @@ export const OnboardingDiagnostic: React.FC<OnboardingDiagnosticProps> = ({
           onClick={handleSaveOnboarding}
           className="inline-flex shrink-0 items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-6 py-3.5 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-500"
         >
-          <span>
-            {isReconfiguring ? 'Guardar mi Plan' : 'Empezar con este Plan'}
-          </span>
+          <span>{isReconfiguring ? 'Guardar mi Plan' : 'Empezar con este Plan'}</span>
           <ArrowRight className="h-4 w-4" />
         </button>
       </div>
@@ -409,9 +387,7 @@ export const OnboardingDiagnostic: React.FC<OnboardingDiagnosticProps> = ({
                 <Scale className="h-5 w-5" />
               </div>
               <div>
-                <h2 className="text-lg font-bold text-slate-900">
-                  1. Tus datos básicos
-                </h2>
+                <h2 className="text-lg font-bold text-slate-900">1. Tus datos básicos</h2>
                 <p className="text-xs text-slate-500">
                   {age !== null
                     ? `Punto de partida (${age} años)`
@@ -423,10 +399,14 @@ export const OnboardingDiagnostic: React.FC<OnboardingDiagnosticProps> = ({
             <div className="space-y-4">
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
-                  <label className="mb-1.5 block text-sm font-semibold text-slate-700">
+                  <label
+                    htmlFor="onboardingdiagnostic-field-1"
+                    className="mb-1.5 block text-sm font-semibold text-slate-700"
+                  >
                     Tu nombre
                   </label>
                   <input
+                    id="onboardingdiagnostic-field-1"
                     type="text"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
@@ -435,10 +415,14 @@ export const OnboardingDiagnostic: React.FC<OnboardingDiagnosticProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-sm font-semibold text-slate-700">
+                  <label
+                    htmlFor="onboardingdiagnostic-field-2"
+                    className="mb-1.5 block text-sm font-semibold text-slate-700"
+                  >
                     Fecha de nacimiento
                   </label>
                   <input
+                    id="onboardingdiagnostic-field-2"
                     type="date"
                     value={birthDate}
                     onChange={(e) => {
@@ -451,9 +435,7 @@ export const OnboardingDiagnostic: React.FC<OnboardingDiagnosticProps> = ({
               </div>
 
               <div>
-                <label className="mb-1.5 block text-sm font-semibold text-slate-700">
-                  Sexo biológico
-                </label>
+                <p className="mb-1.5 block text-sm font-semibold text-slate-700">Sexo biológico</p>
                 <div className="grid grid-cols-2 gap-3">
                   <button
                     type="button"
@@ -482,10 +464,14 @@ export const OnboardingDiagnostic: React.FC<OnboardingDiagnosticProps> = ({
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="mb-1.5 block text-sm font-semibold text-slate-700">
+                  <label
+                    htmlFor="onboardingdiagnostic-field-3"
+                    className="mb-1.5 block text-sm font-semibold text-slate-700"
+                  >
                     Altura (cm)
                   </label>
                   <input
+                    id="onboardingdiagnostic-field-3"
                     type="number"
                     min={120}
                     max={240}
@@ -500,10 +486,14 @@ export const OnboardingDiagnostic: React.FC<OnboardingDiagnosticProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-sm font-semibold text-slate-700">
+                  <label
+                    htmlFor="onboardingdiagnostic-field-4"
+                    className="mb-1.5 block text-sm font-semibold text-slate-700"
+                  >
                     Peso actual (kg)
                   </label>
                   <input
+                    id="onboardingdiagnostic-field-4"
                     type="number"
                     min={30}
                     max={250}
@@ -546,10 +536,14 @@ export const OnboardingDiagnostic: React.FC<OnboardingDiagnosticProps> = ({
                     }`}
                   >
                     <div>
-                      <label className="mb-1 block text-xs font-semibold text-slate-600">
+                      <label
+                        htmlFor="onboardingdiagnostic-field-5"
+                        className="mb-1 block text-xs font-semibold text-slate-600"
+                      >
                         Cuello (cm)
                       </label>
                       <input
+                        id="onboardingdiagnostic-field-5"
                         type="number"
                         step={0.5}
                         value={neckInput}
@@ -559,10 +553,14 @@ export const OnboardingDiagnostic: React.FC<OnboardingDiagnosticProps> = ({
                       />
                     </div>
                     <div>
-                      <label className="mb-1 block text-xs font-semibold text-slate-600">
+                      <label
+                        htmlFor="onboardingdiagnostic-field-6"
+                        className="mb-1 block text-xs font-semibold text-slate-600"
+                      >
                         Cintura (cm)
                       </label>
                       <input
+                        id="onboardingdiagnostic-field-6"
                         type="number"
                         step={0.5}
                         value={waistInput}
@@ -573,10 +571,14 @@ export const OnboardingDiagnostic: React.FC<OnboardingDiagnosticProps> = ({
                     </div>
                     {sex === 'female' && (
                       <div>
-                        <label className="mb-1 block text-xs font-semibold text-slate-600">
+                        <label
+                          htmlFor="onboardingdiagnostic-field-7"
+                          className="mb-1 block text-xs font-semibold text-slate-600"
+                        >
                           Cadera (cm)
                         </label>
                         <input
+                          id="onboardingdiagnostic-field-7"
                           type="number"
                           step={0.5}
                           value={hipInput}
@@ -623,9 +625,7 @@ export const OnboardingDiagnostic: React.FC<OnboardingDiagnosticProps> = ({
                     }`}
                   >
                     <div>
-                      <div className="text-sm font-bold text-slate-900">
-                        {opt.label}
-                      </div>
+                      <div className="text-sm font-bold text-slate-900">{opt.label}</div>
                       <div className="text-xs text-slate-500">{opt.desc}</div>
                     </div>
                     {isSelected && (
@@ -639,9 +639,9 @@ export const OnboardingDiagnostic: React.FC<OnboardingDiagnosticProps> = ({
             </div>
 
             <div className="mt-4 border-t border-slate-100 pt-4">
-              <label className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-500">
+              <p className="mb-2 block text-xs font-bold uppercase tracking-wider text-slate-500">
                 Experiencia entrenando fuerza
-              </label>
+              </p>
               <div className="grid grid-cols-3 gap-2">
                 {(
                   [
@@ -672,10 +672,7 @@ export const OnboardingDiagnostic: React.FC<OnboardingDiagnosticProps> = ({
             COLUMNA DERECHA (6 cols): PASO 3 (TU OBJETIVO Y TUS METAS DIARIAS)
            =================================================================== */}
         <div className="space-y-6 lg:col-span-6">
-          {!isBasicDataComplete ||
-          !diagnostic ||
-          !phaseRecommendation ||
-          !hierarchicalMacros ? (
+          {!isBasicDataComplete || !diagnostic || !phaseRecommendation || !hierarchicalMacros ? (
             <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-8 text-center shadow-xs">
               <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
                 <Target className="h-6 w-6" />
@@ -684,9 +681,9 @@ export const OnboardingDiagnostic: React.FC<OnboardingDiagnosticProps> = ({
                 3. Cálculo en Tiempo Real de tu Plan
               </h2>
               <p className="mx-auto mt-2 max-w-md text-sm text-slate-600">
-                Completa tu <strong>fecha de nacimiento</strong>,{' '}
-                <strong>altura (cm)</strong> y <strong>peso actual (kg)</strong>{' '}
-                en el Paso 1 para calcular tus calorías, proteínas y objetivos reales sin datos de prueba.
+                Completa tu <strong>fecha de nacimiento</strong>, <strong>altura (cm)</strong> y{' '}
+                <strong>peso actual (kg)</strong> en el Paso 1 para calcular tus calorías, proteínas
+                y objetivos reales sin datos de prueba.
               </p>
             </div>
           ) : (
@@ -698,18 +695,12 @@ export const OnboardingDiagnostic: React.FC<OnboardingDiagnosticProps> = ({
                     <Target className="h-5 w-5" />
                   </div>
                   <div>
-                    <h2 className="text-lg font-bold text-slate-900">
-                      3. ¿Cuál es tu objetivo?
-                    </h2>
+                    <h2 className="text-lg font-bold text-slate-900">3. ¿Cuál es tu objetivo?</h2>
                     <p className="text-xs text-slate-500">
                       Grasa corporal estimada:{' '}
-                      <strong className="text-slate-800">
-                        {diagnostic.bfPercent.toFixed(1)}%
-                      </strong>{' '}
+                      <strong className="text-slate-800">{diagnostic.bfPercent.toFixed(1)}%</strong>{' '}
                       · Masa libre de grasa:{' '}
-                      <strong className="text-slate-800">
-                        {diagnostic.lbmKg.toFixed(1)} kg
-                      </strong>
+                      <strong className="text-slate-800">{diagnostic.lbmKg.toFixed(1)} kg</strong>
                     </p>
                   </div>
                 </div>
@@ -718,87 +709,78 @@ export const OnboardingDiagnostic: React.FC<OnboardingDiagnosticProps> = ({
                 <div className="mb-4 flex items-start gap-2.5 rounded-2xl bg-emerald-50/80 p-3.5 text-xs text-emerald-900 ring-1 ring-emerald-200">
                   <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
                   <div>
-                    <span className="font-bold">
-                      Nuestra sugerencia según tus datos:{' '}
-                    </span>
+                    <span className="font-bold">Nuestra sugerencia según tus datos: </span>
                     <span>
-                      {
-                        SIMPLE_PHASE_INFO[phaseRecommendation.recommendedPhase]
-                          .title
-                      }
-                      .{' '}
-                      {
-                        SIMPLE_PHASE_INFO[phaseRecommendation.recommendedPhase]
-                          .desc
-                      }
+                      {SIMPLE_PHASE_INFO[phaseRecommendation.recommendedPhase].title}.{' '}
+                      {SIMPLE_PHASE_INFO[phaseRecommendation.recommendedPhase].desc}
                     </span>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  {(['cut', 'recomp', 'maintenance', 'bulk'] as const).map(
-                    (phaseKey) => {
-                      const opt = phaseRecommendation.options[phaseKey];
-                      const info = SIMPLE_PHASE_INFO[phaseKey];
-                      const isSelected = activePhase === phaseKey;
+                  {(['cut', 'recomp', 'maintenance', 'bulk'] as const).map((phaseKey) => {
+                    const opt = phaseRecommendation.options[phaseKey];
+                    const info = SIMPLE_PHASE_INFO[phaseKey];
+                    const isSelected = activePhase === phaseKey;
 
-                      return (
-                        <button
-                          key={phaseKey}
-                          type="button"
-                          disabled={!opt.enabled}
-                          onClick={() => setUserSelectedPhase(phaseKey)}
-                          className={`flex flex-col justify-between rounded-2xl border p-4 text-left transition ${
-                            !opt.enabled
-                              ? 'cursor-not-allowed border-slate-100 bg-slate-50 opacity-50'
-                              : isSelected
-                                ? 'border-emerald-600 bg-emerald-50/60 ring-2 ring-emerald-600/20'
-                                : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
-                          }`}
-                        >
-                          <div>
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="text-base font-extrabold text-slate-900">
-                                {info.title}
+                    return (
+                      <button
+                        key={phaseKey}
+                        type="button"
+                        disabled={!opt.enabled}
+                        onClick={() => setUserSelectedPhase(phaseKey)}
+                        className={`flex flex-col justify-between rounded-2xl border p-4 text-left transition ${
+                          !opt.enabled
+                            ? 'cursor-not-allowed border-slate-100 bg-slate-50 opacity-50'
+                            : isSelected
+                              ? 'border-emerald-600 bg-emerald-50/60 ring-2 ring-emerald-600/20'
+                              : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+                        }`}
+                      >
+                        <div>
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-base font-extrabold text-slate-900">
+                              {info.title}
+                            </span>
+                            {opt.recommended ? (
+                              <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-bold text-white">
+                                Ideal
                               </span>
-                              {opt.recommended ? (
-                                <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-bold text-white">
-                                  Ideal
-                                </span>
-                              ) : !opt.enabled ? (
-                                <Lock className="h-3.5 w-3.5 text-slate-400" />
-                              ) : null}
-                            </div>
-                            <p className="mt-1 text-xs text-slate-600">
-                              {info.desc}
-                            </p>
+                            ) : !opt.enabled ? (
+                              <Lock className="h-3.5 w-3.5 text-slate-400" />
+                            ) : null}
                           </div>
+                          <p className="mt-1 text-xs text-slate-600">{info.desc}</p>
+                        </div>
 
-                          <div className="mt-3 border-t border-slate-100 pt-2.5">
-                            <span className="text-lg font-extrabold text-slate-900">
-                              {opt.targetKcal} kcal
-                            </span>
-                            <span className="ml-1 text-xs text-slate-500">
-                              / día
-                            </span>
-                          </div>
-                        </button>
-                      );
-                    }
-                  )}
+                        <div className="mt-3 border-t border-slate-100 pt-2.5">
+                          <span className="text-lg font-extrabold text-slate-900">
+                            {opt.targetKcal} kcal
+                          </span>
+                          <span className="ml-1 text-xs text-slate-500">/ día</span>
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
-              <p className="rounded-xl bg-amber-50 p-3 text-sm" role="note">Estas cifras son estimaciones orientativas, no un diagnóstico ni una prescripción. Revisa el plan con un profesional si tienes condiciones médicas, embarazo o necesidades particulares.</p>
-              {hierarchicalMacros.energyAdjustmentReason && <p role="alert" className="rounded-xl bg-amber-50 p-3 text-sm">{hierarchicalMacros.energyAdjustmentReason}</p>}
+              <p className="rounded-xl bg-amber-50 p-3 text-sm" role="note">
+                Estas cifras son estimaciones orientativas, no un diagnóstico ni una prescripción.
+                Revisa el plan con un profesional si tienes condiciones médicas, embarazo o
+                necesidades particulares.
+              </p>
+              {hierarchicalMacros.energyAdjustmentReason && (
+                <p role="alert" className="rounded-xl bg-amber-50 p-3 text-sm">
+                  {hierarchicalMacros.energyAdjustmentReason}
+                </p>
+              )}
               {/* Resumen Final de tu Plan Diario */}
               <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-xs">
                 <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
                     <Flame className="h-5 w-5 text-emerald-600" />
-                    <h2 className="text-lg font-bold text-slate-900">
-                      Tu Meta Diaria Calculada
-                    </h2>
+                    <h2 className="text-lg font-bold text-slate-900">Tu Meta Diaria Calculada</h2>
                   </div>
                   <span className="text-xl font-extrabold text-emerald-700">
                     {hierarchicalMacros.kcal} kcal / día
@@ -807,9 +789,7 @@ export const OnboardingDiagnostic: React.FC<OnboardingDiagnosticProps> = ({
 
                 <div className="grid grid-cols-3 gap-3">
                   <div className="rounded-2xl bg-blue-50 p-4 text-center">
-                    <span className="text-xs font-bold text-blue-700">
-                      Proteínas
-                    </span>
+                    <span className="text-xs font-bold text-blue-700">Proteínas</span>
                     <div className="mt-1 text-2xl font-extrabold text-slate-900">
                       {hierarchicalMacros.proteinG}g
                     </div>
@@ -817,9 +797,7 @@ export const OnboardingDiagnostic: React.FC<OnboardingDiagnosticProps> = ({
                   </div>
 
                   <div className="rounded-2xl bg-emerald-50 p-4 text-center">
-                    <span className="text-xs font-bold text-emerald-700">
-                      Carbohidratos
-                    </span>
+                    <span className="text-xs font-bold text-emerald-700">Carbohidratos</span>
                     <div className="mt-1 text-2xl font-extrabold text-slate-900">
                       {hierarchicalMacros.carbsG}g
                     </div>
@@ -827,9 +805,7 @@ export const OnboardingDiagnostic: React.FC<OnboardingDiagnosticProps> = ({
                   </div>
 
                   <div className="rounded-2xl bg-amber-50 p-4 text-center">
-                    <span className="text-xs font-bold text-amber-800">
-                      Grasas
-                    </span>
+                    <span className="text-xs font-bold text-amber-800">Grasas</span>
                     <div className="mt-1 text-2xl font-extrabold text-slate-900">
                       {hierarchicalMacros.fatG}g
                     </div>
@@ -853,11 +829,7 @@ export const OnboardingDiagnostic: React.FC<OnboardingDiagnosticProps> = ({
                     onClick={handleSaveOnboarding}
                     className="flex w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 py-3.5 text-base font-bold text-white shadow-sm transition hover:bg-emerald-500"
                   >
-                    <span>
-                      {isReconfiguring
-                        ? 'Guardar mi Plan'
-                        : 'Guardar mi Plan y Empezar'}
-                    </span>
+                    <span>{isReconfiguring ? 'Guardar mi Plan' : 'Guardar mi Plan y Empezar'}</span>
                     <ArrowRight className="h-5 w-5" />
                   </button>
                 </div>

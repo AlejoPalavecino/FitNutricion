@@ -1,4 +1,3 @@
-import { ageOn, localDate, isCivilDate, addDays, daysBetween } from './dates';
 import type {
   BiologicalSex,
   BiometricLog,
@@ -10,6 +9,7 @@ import type {
   Recipe,
   TrainingExperience,
 } from '../types/nutrition';
+import { addDays, ageOn, daysBetween, isCivilDate, localDate } from './dates';
 
 // ============================================================================
 // CONSTANTES FISIOLÓGICAS Y BIOMÉTRICAS
@@ -21,7 +21,7 @@ export const KCAL_PER_GRAM_FAT = 9;
 export const KCAL_PER_KG_ADIPOSE_TISSUE = 7700;
 export const MAX_LIPOLYSIS_KCAL_PER_KG_FAT = 68; // Alpert (2005): ~68 kcal/kg grasa/día (~290 kJ/kg)
 export const MAX_CUT_DEFICIT_PERCENT = 0.25;
-export const DEFAULT_CUT_DEFICIT_PERCENT = 0.20;
+export const DEFAULT_CUT_DEFICIT_PERCENT = 0.2;
 export const DEFAULT_RECOMP_DEFICIT_PERCENT = 0.125; // Rango -10% a -15%
 export const DEFAULT_BULK_SURPLUS_PERCENT = 0.12; // Rango +10% a +15%
 export const WEEKLY_TDEE_DAMPING_MAX_PCT = 0.05; // Amortiguador ±5% semanal
@@ -91,8 +91,7 @@ export function calculateUsNavyBodyFat(params: {
     if (diff <= 0) {
       throw new Error('El perímetro de cintura debe ser mayor que el perímetro de cuello.');
     }
-    const denominator =
-      1.0324 - 0.19077 * Math.log10(diff) + 0.15456 * Math.log10(heightCm);
+    const denominator = 1.0324 - 0.19077 * Math.log10(diff) + 0.15456 * Math.log10(heightCm);
     rawBf = 495 / denominator - 450;
   } else {
     if (!hipCm || hipCm <= 0) {
@@ -102,8 +101,7 @@ export function calculateUsNavyBodyFat(params: {
     if (sumDiff <= 0) {
       throw new Error('La suma de cintura y cadera debe ser mayor que el cuello.');
     }
-    const denominator =
-      1.29579 - 0.35004 * Math.log10(sumDiff) + 0.22100 * Math.log10(heightCm);
+    const denominator = 1.29579 - 0.35004 * Math.log10(sumDiff) + 0.221 * Math.log10(heightCm);
     rawBf = 495 / denominator - 450;
   }
 
@@ -249,7 +247,11 @@ export function evaluateAnthropometrics(input: AnthropometricInput): Anthropomet
   const whtr = waistCm && waistCm > 0 ? calculateWhtr(waistCm, heightCm) : undefined;
   const isWhtrAlert = whtr !== undefined && whtr > 0.5;
 
-  const { bmrKcal, formula: bmrFormula, reason: bmrReason } = calculateBmr({
+  const {
+    bmrKcal,
+    formula: bmrFormula,
+    reason: bmrReason,
+  } = calculateBmr({
     sex,
     weightKg,
     heightCm,
@@ -328,18 +330,30 @@ export function calculateTargetCaloriesForPhase(params: {
   maxLipolysisDeficitKcal: number;
 } {
   const { activeTdee, phase, fatMassKg, customAdjustmentPercent } = params;
-  if (!Number.isFinite(activeTdee) || activeTdee <= 0 || !Number.isFinite(fatMassKg) || fatMassKg < 0) throw new RangeError('Datos energéticos inválidos.');
-  const maxLipolysisDeficitKcal = Math.round(Math.max(0, fatMassKg * MAX_LIPOLYSIS_KCAL_PER_KG_FAT));
+  if (
+    !Number.isFinite(activeTdee) ||
+    activeTdee <= 0 ||
+    !Number.isFinite(fatMassKg) ||
+    fatMassKg < 0
+  )
+    throw new RangeError('Datos energéticos inválidos.');
+  const maxLipolysisDeficitKcal = Math.round(
+    Math.max(0, fatMassKg * MAX_LIPOLYSIS_KCAL_PER_KG_FAT),
+  );
 
   if (phase === 'cut') {
     const requestedPct =
       customAdjustmentPercent !== undefined
-        ? Math.max(-MAX_CUT_DEFICIT_PERCENT, Math.min(-0.10, customAdjustmentPercent))
+        ? Math.max(-MAX_CUT_DEFICIT_PERCENT, Math.min(-0.1, customAdjustmentPercent))
         : -DEFAULT_CUT_DEFICIT_PERCENT;
 
     const desiredDeficitKcal = Math.round(activeTdee * Math.abs(requestedPct));
     const maxPctDeficitKcal = Math.round(activeTdee * MAX_CUT_DEFICIT_PERCENT);
-    const effectiveDeficitKcal = Math.min(desiredDeficitKcal, maxPctDeficitKcal, maxLipolysisDeficitKcal);
+    const effectiveDeficitKcal = Math.min(
+      desiredDeficitKcal,
+      maxPctDeficitKcal,
+      maxLipolysisDeficitKcal,
+    );
     const cappedByLipolysis = maxLipolysisDeficitKcal < desiredDeficitKcal;
     const targetKcal = Math.max(1000, activeTdee - effectiveDeficitKcal);
 
@@ -355,12 +369,12 @@ export function calculateTargetCaloriesForPhase(params: {
   if (phase === 'recomp') {
     const requestedPct =
       customAdjustmentPercent !== undefined
-        ? Math.max(-0.15, Math.min(-0.10, customAdjustmentPercent))
+        ? Math.max(-0.15, Math.min(-0.1, customAdjustmentPercent))
         : -DEFAULT_RECOMP_DEFICIT_PERCENT;
 
     const desiredDeficitKcal = Math.min(
       Math.round(activeTdee * Math.abs(requestedPct)),
-      maxLipolysisDeficitKcal
+      maxLipolysisDeficitKcal,
     );
     const targetKcal = Math.max(1100, activeTdee - desiredDeficitKcal);
 
@@ -376,7 +390,7 @@ export function calculateTargetCaloriesForPhase(params: {
   if (phase === 'bulk') {
     const requestedPct =
       customAdjustmentPercent !== undefined
-        ? Math.max(0.10, Math.min(0.15, customAdjustmentPercent))
+        ? Math.max(0.1, Math.min(0.15, customAdjustmentPercent))
         : DEFAULT_BULK_SURPLUS_PERCENT;
 
     const surplusKcal = Math.round(activeTdee * requestedPct);
@@ -406,11 +420,16 @@ export function calculateTargetCaloriesForPhase(params: {
  */
 export function recommendNutritionalPhase(
   input: AnthropometricInput,
-  diagnostic?: AnthropometricDiagnostic
+  diagnostic?: AnthropometricDiagnostic,
 ): PhaseRecommendationResult {
   const diag = diagnostic ?? evaluateAnthropometrics(input);
-  const { sex, trainingExperience, returningFromInactivity, weeksInCurrentDeficit, goalPhysiqueReached } =
-    input;
+  const {
+    sex,
+    trainingExperience,
+    returningFromInactivity,
+    weeksInCurrentDeficit,
+    goalPhysiqueReached,
+  } = input;
   const { bfPercent, fatMassKg, whtr, isWhtrAlert, initialStaticTdee } = diag;
 
   // 1. Evaluar criterios de Déficit Calórico (Cut)
@@ -430,13 +449,13 @@ export function recommendNutritionalPhase(
     (sex === 'male' && bfPercent > 15 && bfPercent <= 20) ||
     (sex === 'female' && bfPercent > 25 && bfPercent <= 30);
   const shouldRecomp =
-    !isPriorityCut && ((isNoviceOrReturning && isModerateAdiposity) || (!shouldCut && isBridgeRange));
+    !isPriorityCut &&
+    ((isNoviceOrReturning && isModerateAdiposity) || (!shouldCut && isBridgeRange));
 
   // 3. Evaluar criterios de Volumen Limpio (Lean Bulk)
   // Habilitar/Recomendar únicamente si Hombres BF% entre 10% y 15% (o <10%) o Mujeres BF% entre 20% y 25% (o <20%)
   const isLeanBulkEligible =
-    !isWhtrAlert &&
-    ((sex === 'male' && bfPercent <= 15) || (sex === 'female' && bfPercent <= 25));
+    !isWhtrAlert && ((sex === 'male' && bfPercent <= 15) || (sex === 'female' && bfPercent <= 25));
 
   // 4. Evaluar criterios de Mantenimiento Dinámico
   const needsDietBreak = (weeksInCurrentDeficit ?? 0) > 12 || Boolean(goalPhysiqueReached);
@@ -502,10 +521,7 @@ export function recommendNutritionalPhase(
       subtitle: 'Pérdida de grasa preservando masa contráctil',
       recommended: recommendedPhase === 'cut',
       priorityAlert: isPriorityCut,
-      enabled: !(
-        (sex === 'male' && bfPercent < 8) ||
-        (sex === 'female' && bfPercent < 16)
-      ),
+      enabled: !((sex === 'male' && bfPercent < 8) || (sex === 'female' && bfPercent < 16)),
       disabledReason:
         (sex === 'male' && bfPercent < 8) || (sex === 'female' && bfPercent < 16)
           ? 'Porcentaje graso cercano al límite esencial; no se recomienda déficit adicional.'
@@ -529,7 +545,7 @@ export function recommendNutritionalPhase(
       enabled: true,
       defaultAdjustmentPercent: recompCalc.appliedAdjustmentPercent,
       minAdjustmentPercent: -0.15,
-      maxAdjustmentPercent: -0.10,
+      maxAdjustmentPercent: -0.1,
       targetKcal: recompCalc.targetKcal,
       effectiveDeficitOrSurplusKcal: recompCalc.deltaKcal,
       cappedByLipolysis: recompCalc.cappedByLipolysis,
@@ -548,7 +564,7 @@ export function recommendNutritionalPhase(
           : `Habilitado únicamente con BF% entre ${sex === 'male' ? '10% y 15%' : '20% y 25%'} (actual: ${bfPercent.toFixed(1)}%). Iniciar volumen ahora deterioraría el ratio P (partición calórica hacia tejido adiposo).`
         : undefined,
       defaultAdjustmentPercent: bulkCalc.appliedAdjustmentPercent,
-      minAdjustmentPercent: 0.10,
+      minAdjustmentPercent: 0.1,
       maxAdjustmentPercent: 0.15,
       targetKcal: bulkCalc.targetKcal,
       effectiveDeficitOrSurplusKcal: bulkCalc.deltaKcal,
@@ -618,8 +634,18 @@ export function calculateHierarchicalMacros(params: {
 }): HierarchicalMacrosResult {
   const { targetKcal, weightKg, lbmKg, bfPercent, sex, phase, customProteinPerKg } = params;
 
-  if (![targetKcal, weightKg, lbmKg, bfPercent].every(Number.isFinite) || targetKcal <= 0 || weightKg <= 0 || lbmKg <= 0) throw new RangeError('Datos de macronutrientes inválidos.');
-  if (customProteinPerKg !== undefined && (!Number.isFinite(customProteinPerKg) || customProteinPerKg <= 0)) throw new RangeError('Factor proteico inválido.');
+  if (
+    ![targetKcal, weightKg, lbmKg, bfPercent].every(Number.isFinite) ||
+    targetKcal <= 0 ||
+    weightKg <= 0 ||
+    lbmKg <= 0
+  )
+    throw new RangeError('Datos de macronutrientes inválidos.');
+  if (
+    customProteinPerKg !== undefined &&
+    (!Number.isFinite(customProteinPerKg) || customProteinPerKg <= 0)
+  )
+    throw new RangeError('Factor proteico inválido.');
 
   // Determinar si el BF% es muy elevado para usar LBM como base proteica y evitar sobreestimación
   const isHighAdiposity =
@@ -633,9 +659,7 @@ export function calculateHierarchicalMacros(params: {
     proteinMultiplier = customProteinPerKg ?? 2.2;
   } else {
     // Mantenimiento o Volumen: 1.8 a 2.0 g/kg (default 1.9 g/kg)
-    proteinMultiplier = customProteinPerKg
-      ? Math.max(1.8, Math.min(2.0, customProteinPerKg))
-      : 1.9;
+    proteinMultiplier = customProteinPerKg ? Math.max(1.8, Math.min(2.0, customProteinPerKg)) : 1.9;
   }
 
   const proteinG = Math.round(referenceMassKg * proteinMultiplier);
@@ -654,9 +678,7 @@ export function calculateHierarchicalMacros(params: {
 
   // Calorías efectivas cuadradas con los macros redondeados
   const effectiveKcal = Math.round(
-    proteinG * KCAL_PER_GRAM_PROTEIN +
-      carbsG * KCAL_PER_GRAM_CARBS +
-      fatG * KCAL_PER_GRAM_FAT
+    proteinG * KCAL_PER_GRAM_PROTEIN + carbsG * KCAL_PER_GRAM_CARBS + fatG * KCAL_PER_GRAM_FAT,
   );
 
   // 4. Fibra (14g / 1,000 kcal) e Hidratación (35 ml * kg)
@@ -666,7 +688,10 @@ export function calculateHierarchicalMacros(params: {
   return {
     kcal: effectiveKcal,
     requestedKcal: targetKcal,
-    energyAdjustmentReason: proteinKcal + fatKcal > targetKcal ? `La meta inicial de ${targetKcal} kcal no permite los macronutrientes calculados. Se muestra su suma coherente (${effectiveKcal} kcal); revisa el plan con un profesional.` : null,
+    energyAdjustmentReason:
+      proteinKcal + fatKcal > targetKcal
+        ? `La meta inicial de ${targetKcal} kcal no permite los macronutrientes calculados. Se muestra su suma coherente (${effectiveKcal} kcal); revisa el plan con un profesional.`
+        : null,
     proteinG,
     carbsG,
     fatG,
@@ -690,10 +715,14 @@ export function calculateHierarchicalMacros(params: {
 export function calculateEwmaStep(
   scaleWeightToday: number,
   trendWeightYesterday: number | undefined | null,
-  alpha = 0.12
+  alpha = 0.12,
 ): number {
   const safeAlpha = Math.max(0.1, Math.min(0.15, alpha));
-  if (trendWeightYesterday === undefined || trendWeightYesterday === null || trendWeightYesterday <= 0) {
+  if (
+    trendWeightYesterday === undefined ||
+    trendWeightYesterday === null ||
+    trendWeightYesterday <= 0
+  ) {
     return Number(scaleWeightToday.toFixed(2));
   }
   const trendToday = scaleWeightToday * safeAlpha + trendWeightYesterday * (1 - safeAlpha);
@@ -760,21 +789,56 @@ export function calculateAdaptiveTdee(params: {
   const { dailyIntakes, biometricLogs, previousTdee, windowDays = 21 } = params;
 
   const referenceDate = params.referenceDate ?? localDate();
-  if (!Number.isInteger(windowDays) || windowDays < 14 || windowDays > 90 || !Number.isFinite(previousTdee) || previousTdee <= 0) throw new RangeError('Ventana o gasto previo inválido.');
-  const firstAllowedDate = addDays(referenceDate, -(windowDays-1));
-  const recentWeights = [...new Map(biometricLogs.filter(b => isCivilDate(b.date) && b.date >= firstAllowedDate && b.date <= referenceDate && Number.isFinite(b.trendWeightKg) && b.trendWeightKg > 0).map(b => [b.date,b])).values()].sort((a,b)=>a.date.localeCompare(b.date));
+  if (
+    !Number.isInteger(windowDays) ||
+    windowDays < 14 ||
+    windowDays > 90 ||
+    !Number.isFinite(previousTdee) ||
+    previousTdee <= 0
+  )
+    throw new RangeError('Ventana o gasto previo inválido.');
+  const firstAllowedDate = addDays(referenceDate, -(windowDays - 1));
+  const recentWeights = [
+    ...new Map(
+      biometricLogs
+        .filter(
+          (b) =>
+            isCivilDate(b.date) &&
+            b.date >= firstAllowedDate &&
+            b.date <= referenceDate &&
+            Number.isFinite(b.trendWeightKg) &&
+            b.trendWeightKg > 0,
+        )
+        .map((b) => [b.date, b]),
+    ).values(),
+  ].sort((a, b) => a.date.localeCompare(b.date));
   const hasEnoughWeights = recentWeights.length >= 2;
   const firstWeightDate = recentWeights[0]?.date ?? firstAllowedDate;
-  const lastWeightDate = recentWeights[recentWeights.length-1]?.date ?? referenceDate;
-  const daySpanBetweenWeights = hasEnoughWeights ? daysBetween(firstWeightDate,lastWeightDate) : 0;
+  const lastWeightDate = recentWeights[recentWeights.length - 1]?.date ?? referenceDate;
+  const daySpanBetweenWeights = hasEnoughWeights ? daysBetween(firstWeightDate, lastWeightDate) : 0;
   // Morning-to-morning weight interval uses intake before the final weigh-in.
-  const recentIntakes = [...new Map(dailyIntakes.filter(d => isCivilDate(d.date) && d.date >= firstWeightDate && d.date < lastWeightDate).map(d=>[d.date,d])).values()];
-  const validLoggedIntakes = recentIntakes.filter((d): d is DailyNutritionSummary & {kcal:number} => d.isComplete === true && d.kcal !== null && Number.isFinite(d.kcal) && d.kcal > 0);
+  const recentIntakes = [
+    ...new Map(
+      dailyIntakes
+        .filter((d) => isCivilDate(d.date) && d.date >= firstWeightDate && d.date < lastWeightDate)
+        .map((d) => [d.date, d]),
+    ).values(),
+  ];
+  const validLoggedIntakes = recentIntakes.filter(
+    (d): d is DailyNutritionSummary & { kcal: number } =>
+      d.isComplete === true && d.kcal !== null && Number.isFinite(d.kcal) && d.kcal > 0,
+  );
   const loggedDaysCount = validLoggedIntakes.length;
-  const imputedDaysCount = Math.max(0,daySpanBetweenWeights-loggedDaysCount);
-  const avgDailyIntakeKcal = loggedDaysCount ? Math.round(validLoggedIntakes.reduce((sum,d)=>sum+d.kcal,0)/loggedDaysCount) : previousTdee;
-  const minRequiredLoggedDays = Math.max(8,Math.ceil(daySpanBetweenWeights*4/7));
-  const isReadyForAdaptive = hasEnoughWeights && daySpanBetweenWeights >= 13 && loggedDaysCount >= minRequiredLoggedDays && daysBetween(lastWeightDate,referenceDate) <= 3;
+  const imputedDaysCount = Math.max(0, daySpanBetweenWeights - loggedDaysCount);
+  const avgDailyIntakeKcal = loggedDaysCount
+    ? Math.round(validLoggedIntakes.reduce((sum, d) => sum + d.kcal, 0) / loggedDaysCount)
+    : previousTdee;
+  const minRequiredLoggedDays = Math.max(8, Math.ceil((daySpanBetweenWeights * 4) / 7));
+  const isReadyForAdaptive =
+    hasEnoughWeights &&
+    daySpanBetweenWeights >= 13 &&
+    loggedDaysCount >= minRequiredLoggedDays &&
+    daysBetween(lastWeightDate, referenceDate) <= 3;
 
   if (!isReadyForAdaptive) {
     return {
@@ -801,8 +865,7 @@ export function calculateAdaptiveTdee(params: {
   const weightSlopeKgPerWeek = Number((weightChangeKgPerDay * 7).toFixed(3));
 
   // Aproximación de balance energético: TDEE estimado = Promedio_Ingesta_Diaria_Kcal - (Cambio_Peso_Tendencia_Kg_Por_Dia * 7700)
-  const rawRealTdee =
-    avgDailyIntakeKcal - weightChangeKgPerDay * KCAL_PER_KG_ADIPOSE_TISSUE;
+  const rawRealTdee = avgDailyIntakeKcal - weightChangeKgPerDay * KCAL_PER_KG_ADIPOSE_TISSUE;
   const calculatedRealTdee = Math.round(Math.max(900, Math.min(6500, rawRealTdee)));
 
   // Amortiguador máximo del ±5% semanal sobre previousTdee
@@ -812,11 +875,7 @@ export function calculateAdaptiveTdee(params: {
   const appliedTdee = Math.max(minAllowedTdee, Math.min(maxAllowedTdee, calculatedRealTdee));
   const wasDamped = appliedTdee !== calculatedRealTdee;
   const dampingDirection =
-    appliedTdee > calculatedRealTdee
-      ? 'down'
-      : appliedTdee < calculatedRealTdee
-        ? 'up'
-        : 'none';
+    appliedTdee > calculatedRealTdee ? 'down' : appliedTdee < calculatedRealTdee ? 'up' : 'none';
 
   return {
     isReadyForAdaptive: true,
@@ -853,7 +912,7 @@ export interface RemainingMacrosVector {
  */
 export function calculateRemainingMacros(
   target: MacroBreakdown,
-  consumed: MacroBreakdown
+  consumed: MacroBreakdown,
 ): RemainingMacrosVector {
   return {
     kcal: Math.round(target.kcal - consumed.kcal),
@@ -898,7 +957,7 @@ export interface BridgeFoodSuggestion {
  */
 export function suggestBridgeFoods(
   remaining: RemainingMacrosVector,
-  foods: FoodItem[]
+  foods: FoodItem[],
 ): BridgeFoodSuggestion[] {
   if (remaining.kcal <= 40 && remaining.P <= 5 && remaining.C <= 5 && remaining.G <= 3) {
     return [];
@@ -909,13 +968,13 @@ export function suggestBridgeFoods(
 
   // Clasificar alimentos por macronutriente dominante
   const leanProteins = pool.filter(
-    (f) => f.proteinPer100g >= 10 && f.proteinPer100g * 4 >= f.kcalPer100g * 0.55
+    (f) => f.proteinPer100g >= 10 && f.proteinPer100g * 4 >= f.kcalPer100g * 0.55,
   );
   const pureCarbs = pool.filter(
-    (f) => f.carbsPer100g >= 12 && f.carbsPer100g * 4 >= f.kcalPer100g * 0.6
+    (f) => f.carbsPer100g >= 12 && f.carbsPer100g * 4 >= f.kcalPer100g * 0.6,
   );
   const healthyFats = pool.filter(
-    (f) => f.fatPer100g >= 12 && f.fatPer100g * 9 >= f.kcalPer100g * 0.55
+    (f) => f.fatPer100g >= 12 && f.fatPer100g * 9 >= f.kcalPer100g * 0.55,
   );
 
   const suggestions: BridgeFoodSuggestion[] = [];
@@ -935,7 +994,7 @@ export function suggestBridgeFoods(
         const cFood = pureCarbs[0];
         const cGrams = Math.max(
           25,
-          Math.min(350, Math.round(((remCarbsAfterP / cFood.carbsPer100g) * 100) / 5) * 5)
+          Math.min(350, Math.round(((remCarbsAfterP / cFood.carbsPer100g) * 100) / 5) * 5),
         );
         const cMacros = calculateFoodItemMacros(cFood, cGrams);
         const combined: MacroBreakdown = {
@@ -1037,10 +1096,13 @@ export interface ScaledRecipeResult {
 export function scaleRecipeToRemaining(
   recipe: Recipe,
   remaining: RemainingMacrosVector,
-  foodsMap: Record<string, FoodItem>
+  foodsMap: Record<string, FoodItem>,
 ): ScaledRecipeResult {
   const baseKcal = Math.max(1, recipe.totalMacros.kcal);
-  const targetKcalToFill = Math.max(200, Math.min(1200, remaining.kcal > 0 ? remaining.kcal : baseKcal));
+  const targetKcalToFill = Math.max(
+    200,
+    Math.min(1200, remaining.kcal > 0 ? remaining.kcal : baseKcal),
+  );
 
   const rawScale = targetKcalToFill / baseKcal;
   const scaleFactor = Number(Math.max(0.35, Math.min(2.5, rawScale)).toFixed(2));

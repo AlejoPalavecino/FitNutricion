@@ -1,9 +1,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { supabase } from './supabaseClient';
 import { reportCloudFailure, useSyncStatusStore } from '../store/useSyncStatusStore';
+import { supabase } from './supabaseClient';
 
 export type SyncResult = { status: 'local' | 'synced' } | { status: 'error'; message: string };
-export async function cloudWrite(userId: string, task: (client: SupabaseClient) => Promise<void>): Promise<SyncResult> {
+export async function cloudWrite(
+  userId: string,
+  task: (client: SupabaseClient) => Promise<void>,
+): Promise<SyncResult> {
   if (!supabase) return { status: 'local' };
   useSyncStatusStore.setState((state) => ({ pendingWrites: state.pendingWrites + 1 }));
   try {
@@ -17,6 +20,8 @@ export async function cloudWrite(userId: string, task: (client: SupabaseClient) 
     reportCloudFailure();
     return { status: 'error', message: 'No se pudo confirmar la escritura remota.' };
   } finally {
-    useSyncStatusStore.setState((state) => ({ pendingWrites: Math.max(0, state.pendingWrites - 1) }));
+    useSyncStatusStore.setState((state) => ({
+      pendingWrites: Math.max(0, state.pendingWrites - 1),
+    }));
   }
 }

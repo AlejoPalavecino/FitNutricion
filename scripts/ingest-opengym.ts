@@ -1,10 +1,12 @@
+import { readLiteralData } from './literal-data.ts';
+import { createHash } from 'node:crypto';
 /**
  * Pipeline de Ingesta y Traducción Estandarizada del Repositorio `emilfunk/opengym`
  *
  * Uso:
  *   node --experimental-strip-types scripts/ingest-opengym.ts [--download-media] [--limit=80]
  *
- * 1. Inspecciona el árbol de GitHub `https://api.github.com/repos/emilfunk/opengym/git/trees/main?recursive=1`
+ * 1. Inspecciona el árbol de GitHub `https://api.github.com/repos/emilfunk/opengym/git/trees/678bf5bf10446e8997a77d43e89c9b2721d8d0fc?recursive=1`
  * 2. Descarga `frontend/src/lib/exercises-data.js`, `frontend/src/locales/es.js` y `frontend/src/instr/es.js`
  * 3. Traduce músculos, equipamiento, títulos (`nameEs`) e instrucciones biomecánicas (`instructionsEs`),
  *    conservando `nameEn` y agregando `aliases` bilingües de gimnasio.
@@ -22,10 +24,11 @@ import type {
 } from '../src/types/nutrition.ts';
 
 const GITHUB_TREE_URL =
-  'https://api.github.com/repos/emilfunk/opengym/git/trees/main?recursive=1';
-const OPENGYM_RAW_BASE = 'https://raw.githubusercontent.com/emilfunk/opengym/main';
+  'https://api.github.com/repos/emilfunk/opengym/git/trees/678bf5bf10446e8997a77d43e89c9b2721d8d0fc?recursive=1';
+const OPENGYM_RAW_BASE =
+  'https://raw.githubusercontent.com/emilfunk/opengym/678bf5bf10446e8997a77d43e89c9b2721d8d0fc';
 const DATASET_RAW_BASE =
-  'https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/main';
+  'https://raw.githubusercontent.com/hasaneyldrm/exercises-dataset/7455efae41b330c265e7cd4b78dfa848e7ce5ebd';
 
 interface RawOpenGymExercise {
   id: string;
@@ -47,7 +50,12 @@ interface RawOpenGymExercise {
 export function mapMuscleToSpanish(rawMuscle: string): MuscleGroupEs {
   const m = rawMuscle.toLowerCase().trim();
   if (m.includes('chest') || m.includes('pectoral')) return 'Pecho';
-  if (m.includes('lat') || m === 'back' || m.includes('upper back') || m.includes('teres'))
+  if (
+    /\b(lats?|latissimus)\b/.test(m) ||
+    m === 'back' ||
+    m.includes('upper back') ||
+    m.includes('teres')
+  )
     return 'Espalda / Dorsales';
   if (m.includes('trap') || m.includes('levator')) return 'Trapecios';
   if (
@@ -64,11 +72,15 @@ export function mapMuscleToSpanish(rawMuscle: string): MuscleGroupEs {
     return 'Gemelos / Pantorrillas';
   if (m.includes('bicep') || m.includes('brachialis')) return 'Bíceps';
   if (m.includes('tricep')) return 'Tríceps';
-  if (m.includes('forearm') || m.includes('wrist') || m.includes('lower arm'))
-    return 'Antebrazos';
+  if (m.includes('forearm') || m.includes('wrist') || m.includes('lower arm')) return 'Antebrazos';
   if (m.includes('adductor') || m.includes('groin')) return 'Aductores';
   if (m.includes('abductor')) return 'Abductores';
-  if (m.includes('lower_back') || m.includes('lower back') || m.includes('spine') || m.includes('erector'))
+  if (
+    m.includes('lower_back') ||
+    m.includes('lower back') ||
+    m.includes('spine') ||
+    m.includes('erector')
+  )
     return 'Espalda Baja / Lumbares';
   if (
     m.includes('abdominal') ||
@@ -398,7 +410,11 @@ const CURATED_EXERCISES: Record<string, CuratedExerciseOverride> = {
   '0405': {
     id: '0405',
     nameEs: 'Press de Hombros Sentado con Mancuernas',
-    aliases: ['Press Hombros Mancuernas', 'Seated Dumbbell Shoulder Press', 'Press Militar Mancuernas'],
+    aliases: [
+      'Press Hombros Mancuernas',
+      'Seated Dumbbell Shoulder Press',
+      'Press Militar Mancuernas',
+    ],
     category: 'hipertrofia',
     primaryMuscleOverride: 'Hombros (Deltoides)',
     secondaryMusclesOverride: ['Tríceps'],
@@ -477,35 +493,46 @@ const CURATED_EXERCISES: Record<string, CuratedExerciseOverride> = {
 };
 
 function parseJsDefaultExportObject(source: string): Record<string, any> {
-  const startIdx = source.indexOf('{');
-  const endIdx = source.lastIndexOf('}');
-  if (startIdx === -1 || endIdx === -1) return {};
-  const objLiteral = source.slice(startIdx, endIdx + 1);
-  try {
-    return Function(`"use strict"; return (${objLiteral});`)();
-  } catch {
-    return {};
-  }
+  const value = readLiteralData(source);
+  if (!value || typeof value !== 'object' || Array.isArray(value))
+    throw new Error('Invalid dictionary.');
+  return value as Record<string, any>;
 }
-
 function parseExdbArray(source: string): RawOpenGymExercise[] {
-  const startIdx = source.indexOf('[');
-  const endIdx = source.lastIndexOf(']');
-  if (startIdx === -1 || endIdx === -1) return [];
-  const arrLiteral = source.slice(startIdx, endIdx + 1);
-  try {
-    return JSON.parse(arrLiteral);
-  } catch {
-    return Function(`"use strict"; return (${arrLiteral});`)();
-  }
+  const value = readLiteralData(source);
+  if (
+    !Array.isArray(value) ||
+    !value.length ||
+    value.some(
+      (row) =>
+        !row ||
+        typeof row.id !== 'string' ||
+        typeof row.n !== 'string' ||
+        typeof row.eq !== 'string' ||
+        typeof row.bp !== 'string' ||
+        typeof row.tg !== 'string',
+    )
+  )
+    throw new Error('Invalid exercise dataset.');
+  if (new Set(value.map((row) => row.id)).size !== value.length)
+    throw new Error('Duplicate source IDs.');
+  return value;
+}
+async function fetchText(url: string): Promise<string> {
+  const response = await fetch(url, { signal: AbortSignal.timeout(15000) });
+  if (!response.ok) throw new Error(`Source request failed: ${response.status}`);
+  return response.text();
 }
 
-function translateGenericEnglishExerciseName(nameEn: string, esDict: Record<string, string>): string {
+function translateGenericEnglishExerciseName(
+  nameEn: string,
+  esDict: Record<string, string>,
+): string {
   if (esDict[nameEn]) return esDict[nameEn];
   const lower = nameEn.toLowerCase();
   if (esDict[lower]) return esDict[lower];
 
-  let translated = nameEn
+  const translated = nameEn
     .replace(/\bbarbell\b/gi, 'con Barra')
     .replace(/\bdumbbell\b/gi, 'con Mancuernas')
     .replace(/\bcable\b/gi, 'en Polea')
@@ -535,6 +562,9 @@ function translateGenericEnglishExerciseName(nameEn: string, esDict: Record<stri
 async function main() {
   const args = process.argv.slice(2);
   const shouldDownloadMedia = args.includes('--download-media');
+  const limit = Number(args.find((arg) => arg.startsWith('--limit='))?.split('=')[1] ?? 50);
+  if (!Number.isInteger(limit) || limit < 1 || limit > 500)
+    throw new Error('--limit must be 1..500');
 
   console.log('1. Consultando árbol de GitHub de emilfunk/opengym...');
   const treeResp = await fetch(GITHUB_TREE_URL, {
@@ -545,11 +575,13 @@ async function main() {
     console.log(`   Árbol verificado: ${treeJson.tree?.length ?? 0} nodos en emilfunk/opengym.`);
   }
 
-  console.log('2. Descargando metadatos de ejercicios y diccionarios en español de emilfunk/opengym...');
+  console.log(
+    '2. Descargando metadatos de ejercicios y diccionarios en español de emilfunk/opengym...',
+  );
   const [exDataText, esLocaleText, esInstrText] = await Promise.all([
-    fetch(`${OPENGYM_RAW_BASE}/frontend/src/lib/exercises-data.js`).then((r) => r.text()),
-    fetch(`${OPENGYM_RAW_BASE}/frontend/src/locales/es.js`).then((r) => r.text()),
-    fetch(`${OPENGYM_RAW_BASE}/frontend/src/instr/es.js`).then((r) => r.text()),
+    fetchText(`${OPENGYM_RAW_BASE}/frontend/src/lib/exercises-data.js`),
+    fetchText(`${OPENGYM_RAW_BASE}/frontend/src/locales/es.js`),
+    fetchText(`${OPENGYM_RAW_BASE}/frontend/src/instr/es.js`),
   ]);
 
   const rawExercises = parseExdbArray(exDataText);
@@ -557,7 +589,7 @@ async function main() {
   const esInstr = parseJsDefaultExportObject(esInstrText);
 
   console.log(
-    `   Extraídos ${rawExercises.length} ejercicios base y ${Object.keys(esInstr).length} conjuntos de instrucciones en español.`
+    `   Extraídos ${rawExercises.length} ejercicios base y ${Object.keys(esInstr).length} conjuntos de instrucciones en español.`,
   );
 
   // Seleccionar primero todos los ejercicios curados de fuerza/hipertrofia y complementar con los más relevantes de cada grupo muscular
@@ -575,7 +607,7 @@ async function main() {
 
   // Añadir ejercicios adicionales representativos por músculo de emilfunk/opengym hasta llegar a 50 ejercicios ricos
   for (const ex of rawExercises) {
-    if (selectedRaw.length >= 50) break;
+    if (selectedRaw.length >= limit) break;
     if (usedIds.has(ex.id)) continue;
     if (
       ex.eq === 'barbell' ||
@@ -591,7 +623,7 @@ async function main() {
 
   const catalog: ExerciseCatalogItem[] = [];
 
-  for (const raw of selectedRaw) {
+  for (const raw of selectedRaw.slice(0, limit)) {
     const curated = CURATED_EXERCISES[raw.id];
     const primaryMuscle =
       curated?.primaryMuscleOverride ?? mapMuscleToSpanish(raw.tg || raw.mg || raw.bp);
@@ -599,15 +631,12 @@ async function main() {
       curated?.secondaryMusclesOverride ??
       Array.from(
         new Set(
-          (raw.sm ?? [])
-            .map((m) => mapMuscleToSpanish(m))
-            .filter((m) => m !== primaryMuscle)
-        )
+          (raw.sm ?? []).map((m) => mapMuscleToSpanish(m)).filter((m) => m !== primaryMuscle),
+        ),
       );
     const equipment = curated?.equipmentOverride ?? mapEquipmentToSpanish(raw.eq, raw.n);
     const nameEs = curated?.nameEs ?? translateGenericEnglishExerciseName(raw.n, esLocale);
-    const instructionsEs: string[] =
-      curated?.biomechanicalInstructionsEs ??
+    const instructionsEs: string[] = curated?.biomechanicalInstructionsEs ??
       esInstr[raw.id] ??
       raw.st ?? [
         'Adopta una postura estable con el core activo y las escápulas controladas.',
@@ -637,12 +666,7 @@ async function main() {
             : 'hipertrofia');
 
     const aliases = Array.from(
-      new Set([
-        ...(curated?.aliases ?? []),
-        raw.n,
-        nameEs,
-        `${primaryMuscle} con ${equipment}`,
-      ])
+      new Set([...(curated?.aliases ?? []), raw.n, nameEs, `${primaryMuscle} con ${equipment}`]),
     );
 
     catalog.push({
@@ -664,17 +688,19 @@ async function main() {
     const publicDir = path.resolve(process.cwd(), 'public', 'exercises');
     await fs.mkdir(publicDir, { recursive: true });
     console.log(`3. Descargando miniaturas locales en ${publicDir} (Offline-First)...`);
-    for (const item of catalog.slice(0, 12)) {
-      const stillUrl = item.images[0];
-      const fileName = path.basename(stillUrl);
-      try {
-        const res = await fetch(stillUrl);
-        if (res.ok) {
-          const buf = Buffer.from(await res.arrayBuffer());
-          await fs.writeFile(path.join(publicDir, fileName), buf);
-        }
-      } catch {
-        // Fallback a URL remota si falla la red
+    for (const item of catalog) {
+      for (let i = 0; i < item.images.length; i++) {
+        const url = item.images[i];
+        const response = await fetch(url, { signal: AbortSignal.timeout(20000) });
+        if (!response.ok) throw new Error(`Media request failed: ${response.status}`);
+        const bytes = Buffer.from(await response.arrayBuffer());
+        if (bytes.length > 20_000_000) throw new Error('Media too large.');
+        const extension = path.extname(new URL(url).pathname).toLowerCase();
+        if (!['.png', '.jpg', '.jpeg', '.gif', '.webp'].includes(extension))
+          throw new Error('Unsupported media type.');
+        const name = createHash('sha256').update(url).digest('hex').slice(0, 24) + extension;
+        await fs.writeFile(path.join(publicDir, name), bytes);
+        item.images[i] = `/exercises/${name}`;
       }
     }
   }
@@ -690,8 +716,12 @@ import type { ExerciseCatalogItem, WorkoutRoutine, WorkoutSession } from '../typ
 export const OPENGYM_EXERCISE_CATALOG: ExerciseCatalogItem[] = ${JSON.stringify(catalog, null, 2)};
 `;
 
-  await fs.writeFile(outPath, fileContent, 'utf8');
-  console.log(`✅ Catálogo OpenGym generado exitosamente en ${outPath} (${catalog.length} ejercicios bilingües).`);
+  if (!catalog.length) throw new Error('Refusing to overwrite an empty catalog.');
+  await fs.writeFile(outPath + '.tmp', fileContent, 'utf8');
+  await fs.rename(outPath + '.tmp', outPath);
+  console.log(
+    `✅ Catálogo OpenGym generado exitosamente en ${outPath} (${catalog.length} ejercicios bilingües).`,
+  );
 }
 
 main().catch((err) => {

@@ -1,45 +1,56 @@
-/**
- * Configuración centralizada y validada de variables de entorno.
- * Nunca expone ni registra claves privadas en consola.
- */
-
-interface AppEnvironmentConfig {
+export interface AppEnvironmentConfig {
   readonly supabaseUrl: string;
   readonly supabaseAnonKey: string;
   readonly appEnv: 'development' | 'production' | 'test';
+  readonly authMode: 'local' | 'cloud';
   readonly isCloudConfigured: boolean;
+  readonly configurationError: string | null;
 }
-
-function readEnvVar(key: string): string {
-  const raw = import.meta.env?.[key];
-  return typeof raw === 'string' ? raw.trim() : '';
-}
-
-function normalizeSupabaseUrl(url: string): string {
-  return url
-    .trim()
+export function parseEnvironment(
+  values: Record<string, unknown>,
+  production = false,
+): AppEnvironmentConfig {
+  const text = (key: string) =>
+    typeof values[key] === 'string' ? (values[key] as string).trim() : '';
+  const mode = text('VITE_AUTH_MODE');
+  const authMode = mode === 'cloud' ? 'cloud' : 'local';
+  const supabaseUrl = text('VITE_SUPABASE_URL')
     .replace(/\/rest\/v1\/?$/i, '')
     .replace(/\/+$/, '');
+  const supabaseAnonKey = text('VITE_SUPABASE_ANON_KEY');
+  let configurationError: string | null = null;
+  let validUrl = false;
+  try {
+    const u = new URL(supabaseUrl);
+    validUrl =
+      u.protocol === 'https:' &&
+      !u.username &&
+      !u.password &&
+      !u.hostname.includes('tu-proyecto-id');
+  } catch {
+    validUrl = false;
+  }
+  let privileged = supabaseAnonKey.startsWith('sb_secret_');
+  try {
+    const payload = JSON.parse(
+      atob(supabaseAnonKey.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')),
+    );
+    privileged ||= payload.role === 'service_role';
+  } catch {
+    /* Publishable keys are not JWTs. */
+  }
+  if ((production && !mode) || (mode && mode !== 'local' && mode !== 'cloud'))
+    configurationError = 'Configura VITE_AUTH_MODE explícitamente como local o cloud.';
+  if (authMode === 'cloud' && (!validUrl || supabaseAnonKey.length < 21 || privileged))
+    configurationError =
+      'Configuración de nube inválida. Usa HTTPS y una clave pública; nunca una clave privilegiada.';
+  return {
+    supabaseUrl,
+    supabaseAnonKey,
+    authMode,
+    appEnv: values.MODE === 'test' ? 'test' : production ? 'production' : 'development',
+    configurationError,
+    isCloudConfigured: authMode === 'cloud' && !configurationError,
+  };
 }
-
-const supabaseUrl = normalizeSupabaseUrl(readEnvVar('VITE_SUPABASE_URL'));
-const supabaseAnonKey = readEnvVar('VITE_SUPABASE_ANON_KEY');
-const rawAppEnv = readEnvVar('VITE_APP_ENV');
-
-const isValidSupabaseUrl =
-  supabaseUrl.startsWith('https://') &&
-  !supabaseUrl.includes('tu-proyecto-id.supabase.co');
-
-const isValidAnonKey =
-  supabaseAnonKey.length > 20 &&
-  supabaseAnonKey !== 'tu_clave_publica_anon_de_supabase';
-
-export const envConfig: AppEnvironmentConfig = Object.freeze({
-  supabaseUrl,
-  supabaseAnonKey,
-  appEnv:
-    rawAppEnv === 'production' || rawAppEnv === 'test'
-      ? rawAppEnv
-      : 'development',
-  isCloudConfigured: isValidSupabaseUrl && isValidAnonKey,
-});
+export const envConfig = Object.freeze(parseEnvironment(import.meta.env, import.meta.env.PROD));

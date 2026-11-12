@@ -1,48 +1,80 @@
 import { del, get, set } from 'idb-keyval';
 import type { StateStorage } from 'zustand/middleware';
-
-/**
- * Adaptador de almacenamiento Offline-First híbrido (IndexedDB + espejo rápido en LocalStorage).
- * Los errores de escritura se propagan cuando no existe una copia durable.
- */
+interface Envelope {
+  format: 'fitnutricion-storage-v1';
+  revision: number;
+  value: string;
+}
+let clock = 0;
+function unpack(raw: string | null | undefined): { revision: number; value: string } | null {
+  if (raw == null) return null;
+  try {
+    const value = JSON.parse(raw);
+    if (
+      value?.format === 'fitnutricion-storage-v1' &&
+      Number.isFinite(value.revision) &&
+      typeof value.value === 'string'
+    )
+      return value;
+  } catch {
+    /* Legacy payloads are validated during hydration. */
+  }
+  return { revision: 0, value: raw };
+}
 export const offlineFirstStorage: StateStorage = {
-  getItem: async (name: string): Promise<string | null> => {
+  async getItem(name) {
+    let local: ReturnType<typeof unpack> = null,
+      remote: ReturnType<typeof unpack> = null;
     try {
-      if (typeof indexedDB !== 'undefined') {
-        const idbValue = await get<string>(name);
-        if (idbValue !== undefined && idbValue !== null) {
-          return idbValue;
-        }
-      }
+      if (typeof localStorage !== 'undefined') local = unpack(localStorage.getItem(name));
     } catch {
-      // Fallback silencioso a LocalStorage si IndexedDB está restringido
+      /* Try IndexedDB independently. */
     }
     try {
-      return typeof localStorage !== 'undefined' ? localStorage.getItem(name) : null;
+      if (typeof indexedDB !== 'undefined') remote = unpack(await get<string>(name));
     } catch {
-      return null;
+      /* Local mirror may still be durable. */
     }
+    const latest =
+      local && remote ? (local.revision >= remote.revision ? local : remote) : (local ?? remote);
+    clock = Math.max(clock, latest?.revision ?? 0);
+    return latest?.value ?? null;
   },
-  setItem: async (name: string, value: string): Promise<void> => {
+  async setItem(name, value) {
+    clock = Math.max(Date.now(), clock + 1);
+    const envelope: Envelope = { format: 'fitnutricion-storage-v1', revision: clock, value };
+    const encoded = JSON.stringify(envelope);
     let stored = false;
     try {
-      if (typeof localStorage !== 'undefined') { localStorage.setItem(name, value); stored = true; }
-    } catch { /* IndexedDB may still accept the write. */ }
-    try {
-      if (typeof indexedDB !== 'undefined') { await set(name, value); stored = true; }
-    } catch { /* The caller is notified if neither store succeeded. */ }
-    if (!stored) throw new Error('No durable browser storage is available.');
-  },
-  removeItem: async (name: string): Promise<void> => {
-    try {
       if (typeof localStorage !== 'undefined') {
-        localStorage.removeItem(name);
-      }
-      if (typeof indexedDB !== 'undefined') {
-        await del(name);
+        localStorage.setItem(name, encoded);
+        stored = true;
       }
     } catch {
-      // Ignorar errores de limpieza
+      /* IndexedDB may still accept a larger snapshot. */
     }
+    try {
+      if (typeof indexedDB !== 'undefined') {
+        await set(name, encoded);
+        stored = true;
+      }
+    } catch {
+      /* Notify when both stores fail. */
+    }
+    if (!stored) throw new Error('No durable browser storage is available.');
+  },
+  async removeItem(name) {
+    let failed = false;
+    try {
+      if (typeof localStorage !== 'undefined') localStorage.removeItem(name);
+    } catch {
+      failed = true;
+    }
+    try {
+      if (typeof indexedDB !== 'undefined') await del(name);
+    } catch {
+      failed = true;
+    }
+    if (failed) throw new Error('No se pudieron borrar todas las copias.');
   },
 };
