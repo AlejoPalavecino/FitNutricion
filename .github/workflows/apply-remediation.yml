@@ -40,7 +40,10 @@ jobs:
       - name: Apply readable guarded implementation
         run: python3 .review/implementation.py
       - run: npm ci
-      - run: if [ -f scripts/generate-seed.mjs ]; then node scripts/generate-seed.mjs; fi
+      - run: node scripts/generate-seed.mjs
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm audit --audit-level=high
       - run: npm test
       - run: npm run build
         env:
@@ -51,13 +54,13 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f supabase/tests/bootstrap.sql
           psql -v ON_ERROR_STOP=1 -f supabase/schema.sql
           for file in supabase/migrations/*.sql; do psql -v ON_ERROR_STOP=1 -f "$file"; done
-          if [ -f supabase/seed.sql ]; then
-            psql -v ON_ERROR_STOP=1 -f supabase/seed.sql
-            psql -v ON_ERROR_STOP=1 -f supabase/seed.sql
-          fi
+          psql -v ON_ERROR_STOP=1 -f supabase/seed.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/seed.sql
           for file in supabase/tests/*.sql; do
             [ "$file" = supabase/tests/bootstrap.sql ] || psql -v ON_ERROR_STOP=1 -f "$file"
           done
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
       - name: Commit only to the reviewed branch
         env:
           GH_TOKEN: ${{ github.token }}
@@ -66,7 +69,7 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
-          git commit -m 'fix: apply validated remediation stage'
+          git commit -m 'fix: apply validated quality and offline improvements'
           AUTH=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
           git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $AUTH" push origin "HEAD:${GITHUB_REF_NAME}"
       - name: Package review workspace without credentials
