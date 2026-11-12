@@ -7,7 +7,7 @@ export function snapshotDocuments(snapshot:PersistedUserSnapshot):Change[]{
   for(const [kind,field]of Object.entries(collections) as [keyof typeof collections,typeof collections[keyof typeof collections]][]){
     for(const item of snapshot[field]){const value={...item} as Record<string,unknown>;result.push({kind,key:String(kind==='biometric'?value.date:value.id),value});}
   }
-  result.push({kind:'preferences',key:'favorites',value:{favoriteFoodIds:snapshot.favoriteFoodIds}});return result;
+  result.push({kind:'preferences',key:'favorites',value:{favoriteFoodIds:snapshot.favoriteFoodIds,completedNutritionDates:snapshot.completedNutritionDates}});return result;
 }
 export function diffDocuments(before:Change[],after:Change[]):Change[]{
   const prev=new Map(before.map(doc=>[documentId(doc),doc]));const next=new Map(after.map(doc=>[documentId(doc),doc]));const changes:Change[]=[];
@@ -20,7 +20,7 @@ export function applyDocuments(snapshot:PersistedUserSnapshot,docs:Document[]):P
   for(const doc of docs){
     if(doc.value===null){next.deletedRecordIds.push(doc.key);continue;}
     if(doc.kind==='profile')next.userProfile=doc.value as unknown as PersistedUserSnapshot['userProfile'];
-    else if(doc.kind==='preferences')next.favoriteFoodIds=Array.isArray(doc.value.favoriteFoodIds)?doc.value.favoriteFoodIds.filter((id):id is string=>typeof id==='string'):[];
+    else if(doc.kind==='preferences'){next.favoriteFoodIds=Array.isArray(doc.value.favoriteFoodIds)?doc.value.favoriteFoodIds.filter((id):id is string=>typeof id==='string'):[];next.completedNutritionDates=Array.isArray(doc.value.completedNutritionDates)?doc.value.completedNutritionDates.filter((d):d is string=>typeof d==='string'):[];}
     else (next[collections[doc.kind]] as unknown as Record<string,unknown>[]).push(doc.value);
   }
   next.biometricLogs.sort((a,b)=>a.date.localeCompare(b.date));next.workoutSessions.sort((a,b)=>b.date.localeCompare(a.date));next.metabolicCheckins.sort((a,b)=>b.weekDate.localeCompare(a.weekDate));return next;

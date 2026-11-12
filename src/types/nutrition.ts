@@ -33,6 +33,7 @@ export interface UserProfile {
   bmrKcal: number;
   bmrFormulaUsed: BmrFormula;
   targetKcal: number;
+  targetAdjustmentReason?: string;
   targetProteinG: number;
   targetCarbsG: number;
   targetFatG: number;

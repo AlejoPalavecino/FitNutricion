@@ -1,3 +1,4 @@
+import { localDate, weekStart } from '../../lib/dates';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   CheckCircle2,
@@ -31,6 +32,10 @@ const PHASE_LABELS: Record<string, string> = {
 export const BiometricCheckinView: React.FC<BiometricCheckinViewProps> = ({
   onOpenReconfigure,
 }) => {
+  const timelineLogs = useNutritionStore(s=>s.timelineLogs);
+  const completeDates = useNutritionStore(s=>s.completedNutritionDates);
+  const checkins = useNutritionStore(s=>s.metabolicCheckins);
+  const alreadyApplied = checkins.some(c=>weekStart(c.weekDate)===weekStart());
   const userProfile = useNutritionStore((s) => s.userProfile);
   const biometricLogs = useNutritionStore((s) => s.biometricLogs);
   const addOrUpdateBiometricLog = useNutritionStore(
@@ -50,7 +55,7 @@ export const BiometricCheckinView: React.FC<BiometricCheckinViewProps> = ({
   const latestLog = sortedLogs[sortedLogs.length - 1];
 
   const [logDate, setLogDate] = useState(() =>
-    new Date().toISOString().slice(0, 10)
+    localDate()
   );
   const [scaleWeight, setScaleWeight] = useState<number>(
     latestLog?.scaleWeightKg ?? 70
@@ -65,14 +70,14 @@ export const BiometricCheckinView: React.FC<BiometricCheckinViewProps> = ({
 
   const adaptiveStatus = useMemo(
     () => computeCurrentAdaptiveTdeeStatus(),
-    [computeCurrentAdaptiveTdeeStatus, biometricLogs, userProfile]
+    [computeCurrentAdaptiveTdeeStatus, biometricLogs, userProfile, timelineLogs, completeDates]
   );
 
   if (!userProfile) return null;
 
   const handlePeriodicControlSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!Number.isFinite(scaleWeight) || scaleWeight < 30 || scaleWeight > 250) {
+    if (logDate > localDate() || !Number.isFinite(scaleWeight) || scaleWeight < 30 || scaleWeight > 250) {
       return;
     }
     addOrUpdateBiometricLog({
@@ -103,7 +108,7 @@ export const BiometricCheckinView: React.FC<BiometricCheckinViewProps> = ({
             Evolución de tu Peso · {userProfile.name}
           </h1>
           <p className="mt-1 text-sm text-slate-600">
-            Calculamos tu promedio real a partir de tus propios pesajes para filtrar las variaciones diarias de agua.
+            Calculamos tu promedio suavizado a partir de tus propios pesajes para filtrar las variaciones diarias de agua.
           </p>
         </div>
 
@@ -152,13 +157,13 @@ export const BiometricCheckinView: React.FC<BiometricCheckinViewProps> = ({
 
         <div className="rounded-3xl border border-emerald-200 bg-emerald-50/40 p-5 shadow-xs">
           <span className="text-xs font-bold uppercase tracking-wider text-emerald-700">
-            Tu Peso Promedio Real
+            Tu Tendencia de Peso Estimada
           </span>
           <div className="mt-1 text-3xl font-extrabold text-emerald-700">
             {latestLog ? `${latestLog.trendWeightKg.toFixed(1)} kg` : '—'}
           </div>
           <span className="mt-1 block text-xs text-slate-600">
-            Sin variaciones de agua del día a día
+            Suavizado orientativo; no distingue agua de otros cambios
           </span>
         </div>
 
@@ -277,7 +282,7 @@ export const BiometricCheckinView: React.FC<BiometricCheckinViewProps> = ({
                   <div className="mt-3 space-y-2 text-xs text-slate-600">
                     <p>
                       Según tu progreso real ({adaptiveStatus.weightSlopeKgPerWeek >= 0 ? '+' : ''}
-                      {adaptiveStatus.weightSlopeKgPerWeek} kg/semana), tu cuerpo quema{' '}
+                      {adaptiveStatus.weightSlopeKgPerWeek} kg/semana), el modelo estima un gasto de{' '}
                       <strong className="text-slate-900">
                         {adaptiveStatus.appliedTdee} kcal
                       </strong>{' '}
@@ -286,15 +291,16 @@ export const BiometricCheckinView: React.FC<BiometricCheckinViewProps> = ({
                     <button
                       type="button"
                       onClick={handleApplyAdaptiveTdee}
+                      disabled={alreadyApplied}
                       className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 py-2.5 text-xs font-bold text-white hover:bg-indigo-500"
                     >
                       <RefreshCw className="h-4 w-4" />
-                      <span>Actualizar mis calorías de la semana</span>
+                      <span>{alreadyApplied ? 'Revisión semanal ya registrada' : 'Actualizar mis calorías de la semana'}</span>
                     </button>
                   </div>
                 ) : (
                   <p className="mt-1.5 text-xs text-slate-500">
-                    Registra tu peso y comidas durante al menos 2 semanas para que el motor calcule y ajuste tus calorías reales automáticamente.
+                    Registra tu peso y comidas durante al menos 2 semanas para que el motor calcule y ajuste tus calorías estimadas con tu confirmación.
                   </p>
                 )}
               </div>
@@ -308,10 +314,10 @@ export const BiometricCheckinView: React.FC<BiometricCheckinViewProps> = ({
             <div className="mb-4 flex items-center justify-between">
               <div>
                 <h2 className="text-lg font-bold text-slate-900">
-                  Gráfica de tu Progreso Real
+                  Gráfica de tu Progreso
                 </h2>
                 <p className="text-xs text-slate-500">
-                  La línea verde muestra tu tendencia real; la gris es el peso de la báscula cada día
+                  La línea verde muestra tu tendencia estimada; la gris es el peso de la báscula cada día
                 </p>
               </div>
               <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">
@@ -368,7 +374,7 @@ export const BiometricCheckinView: React.FC<BiometricCheckinViewProps> = ({
                     <Line
                       type="monotone"
                       dataKey="trendWeightKg"
-                      name="Peso Real (Promedio)"
+                      name="Tendencia de peso (estimada)"
                       stroke="#059669"
                       strokeWidth={3.5}
                       dot={{ r: 3.5, fill: '#059669' }}

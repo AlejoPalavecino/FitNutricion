@@ -215,12 +215,12 @@ export const OnboardingDiagnostic: React.FC<OnboardingDiagnosticProps> = ({
     weightKg <= 250;
 
   const age = useMemo(
-    () => (birthDate ? calculateAgeFromBirthDate(birthDate) : null),
+    () => { try { return birthDate ? calculateAgeFromBirthDate(birthDate) : null; } catch { return null; } },
     [birthDate]
   );
 
   const diagnostic = useMemo(() => {
-    if (!isBasicDataComplete || age === null) return null;
+    if (!isBasicDataComplete || age === null || age < 18 || age > 100) return null;
     return evaluateAnthropometrics({
       sex,
       age,
@@ -317,9 +317,9 @@ export const OnboardingDiagnostic: React.FC<OnboardingDiagnosticProps> = ({
       setValidationError('Por favor ingresa tu nombre.');
       return;
     }
-    if (!birthDate) {
+    if (!birthDate || age === null || age < 18 || age > 100) {
       setValidationError(
-        'Ingresa tu fecha de nacimiento en el Paso 1 para calcular tu gasto energético real.'
+        'Ingresa una fecha válida. El plan automático está limitado a personas adultas de 18 a 100 años.'
       );
       return;
     }
@@ -789,6 +789,8 @@ export const OnboardingDiagnostic: React.FC<OnboardingDiagnosticProps> = ({
                 </div>
               </div>
 
+              <p className="rounded-xl bg-amber-50 p-3 text-sm" role="note">Estas cifras son estimaciones orientativas, no un diagnóstico ni una prescripción. Revisa el plan con un profesional si tienes condiciones médicas, embarazo o necesidades particulares.</p>
+              {hierarchicalMacros.energyAdjustmentReason && <p role="alert" className="rounded-xl bg-amber-50 p-3 text-sm">{hierarchicalMacros.energyAdjustmentReason}</p>}
               {/* Resumen Final de tu Plan Diario */}
               <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-xs">
                 <div className="mb-4 flex items-center justify-between">

@@ -1,3 +1,4 @@
+import { ageOn, localDate, isCivilDate, addDays, daysBetween } from './dates';
 import type {
   BiologicalSex,
   BiometricLog,
@@ -63,15 +64,7 @@ export interface AnthropometricDiagnostic {
  * Calcula la edad en años cumplidos a partir de la fecha de nacimiento (YYYY-MM-DD).
  */
 export function calculateAgeFromBirthDate(birthDate: string, referenceDateStr?: string): number {
-  const birth = new Date(birthDate);
-  if (Number.isNaN(birth.getTime())) return 28;
-  const ref = referenceDateStr ? new Date(referenceDateStr) : new Date();
-  let age = ref.getFullYear() - birth.getFullYear();
-  const m = ref.getMonth() - birth.getMonth();
-  if (m < 0 || (m === 0 && ref.getDate() < birth.getDate())) {
-    age--;
-  }
-  return Math.max(14, Math.min(100, age));
+  return ageOn(birthDate, referenceDateStr ?? localDate());
 }
 
 /**
@@ -335,7 +328,8 @@ export function calculateTargetCaloriesForPhase(params: {
   maxLipolysisDeficitKcal: number;
 } {
   const { activeTdee, phase, fatMassKg, customAdjustmentPercent } = params;
-  const maxLipolysisDeficitKcal = Math.round(Math.max(250, fatMassKg * MAX_LIPOLYSIS_KCAL_PER_KG_FAT));
+  if (!Number.isFinite(activeTdee) || activeTdee <= 0 || !Number.isFinite(fatMassKg) || fatMassKg < 0) throw new RangeError('Datos energéticos inválidos.');
+  const maxLipolysisDeficitKcal = Math.round(Math.max(0, fatMassKg * MAX_LIPOLYSIS_KCAL_PER_KG_FAT));
 
   if (phase === 'cut') {
     const requestedPct =
@@ -351,8 +345,8 @@ export function calculateTargetCaloriesForPhase(params: {
 
     return {
       targetKcal,
-      appliedAdjustmentPercent: Number((-(effectiveDeficitKcal / activeTdee)).toFixed(4)),
-      deltaKcal: -effectiveDeficitKcal,
+      appliedAdjustmentPercent: Number(((targetKcal - activeTdee) / activeTdee).toFixed(4)),
+      deltaKcal: targetKcal - activeTdee,
       cappedByLipolysis,
       maxLipolysisDeficitKcal,
     };
@@ -372,8 +366,8 @@ export function calculateTargetCaloriesForPhase(params: {
 
     return {
       targetKcal,
-      appliedAdjustmentPercent: Number((-(desiredDeficitKcal / activeTdee)).toFixed(4)),
-      deltaKcal: -desiredDeficitKcal,
+      appliedAdjustmentPercent: Number(((targetKcal - activeTdee) / activeTdee).toFixed(4)),
+      deltaKcal: targetKcal - activeTdee,
       cappedByLipolysis: maxLipolysisDeficitKcal < Math.round(activeTdee * Math.abs(requestedPct)),
       maxLipolysisDeficitKcal,
     };
@@ -595,6 +589,8 @@ export interface HierarchicalMacrosResult extends MacroBreakdown {
   proteinBasisUsed: 'total_weight' | 'lbm_adjusted';
   proteinGramsPerKgBasis: number;
   fatFloorApplied: boolean;
+  requestedKcal: number;
+  energyAdjustmentReason: string | null;
 }
 
 /**
@@ -621,6 +617,9 @@ export function calculateHierarchicalMacros(params: {
   customProteinPerKg?: number;
 }): HierarchicalMacrosResult {
   const { targetKcal, weightKg, lbmKg, bfPercent, sex, phase, customProteinPerKg } = params;
+
+  if (![targetKcal, weightKg, lbmKg, bfPercent].every(Number.isFinite) || targetKcal <= 0 || weightKg <= 0 || lbmKg <= 0) throw new RangeError('Datos de macronutrientes inválidos.');
+  if (customProteinPerKg !== undefined && (!Number.isFinite(customProteinPerKg) || customProteinPerKg <= 0)) throw new RangeError('Factor proteico inválido.');
 
   // Determinar si el BF% es muy elevado para usar LBM como base proteica y evitar sobreestimación
   const isHighAdiposity =
@@ -661,11 +660,13 @@ export function calculateHierarchicalMacros(params: {
   );
 
   // 4. Fibra (14g / 1,000 kcal) e Hidratación (35 ml * kg)
-  const fiberG = Math.round((targetKcal / 1000) * 14);
+  const fiberG = Math.round((effectiveKcal / 1000) * 14);
   const waterMl = Math.round(35 * weightKg);
 
   return {
     kcal: effectiveKcal,
+    requestedKcal: targetKcal,
+    energyAdjustmentReason: proteinKcal + fatKcal > targetKcal ? `La meta inicial de ${targetKcal} kcal no permite los macronutrientes calculados. Se muestra su suma coherente (${effectiveKcal} kcal); revisa el plan con un profesional.` : null,
     proteinG,
     carbsG,
     fatG,
@@ -718,7 +719,8 @@ export function recalculateBiometricTrends(logs: BiometricLog[], alpha = 0.12): 
 
 export interface DailyNutritionSummary {
   date: string; // YYYY-MM-DD
-  kcal: number | null; // null o 0 si el día quedó vacío (se imputará promedio habitual)
+  kcal: number | null;
+  isComplete?: boolean; // Explicit user confirmation; missing is not complete.
 }
 
 export interface AdaptiveTdeeResult {
@@ -753,53 +755,31 @@ export function calculateAdaptiveTdee(params: {
   biometricLogs: BiometricLog[];
   previousTdee: number;
   windowDays?: number;
+  referenceDate?: string;
 }): AdaptiveTdeeResult {
   const { dailyIntakes, biometricLogs, previousTdee, windowDays = 21 } = params;
 
-  const sortedWeights = [...biometricLogs].sort((a, b) => a.date.localeCompare(b.date));
-  const recentWeights = sortedWeights.slice(-windowDays);
-
-  const sortedIntakes = [...dailyIntakes].sort((a, b) => a.date.localeCompare(b.date));
-  const recentIntakes = sortedIntakes.slice(-windowDays);
-
-  const validLoggedIntakes = recentIntakes.filter(
-    (d): d is { date: string; kcal: number } => d.kcal !== null && d.kcal > 400
-  );
-
-  const loggedDaysCount = validLoggedIntakes.length;
-  const totalSpanDays = Math.max(recentWeights.length, recentIntakes.length);
-  const imputedDaysCount = Math.max(0, windowDays - loggedDaysCount);
-
-  // Calcular promedio habitual en días registrados (Imputación Inteligente)
-  const habitualAvgKcal =
-    loggedDaysCount > 0
-      ? Math.round(
-          validLoggedIntakes.reduce((sum, item) => sum + item.kcal, 0) / loggedDaysCount
-        )
-      : previousTdee;
-
-  // Como cada día vacío se imputa con habitualAvgKcal, el promedio diario de la ventana de 21 días
-  // con imputación inteligente es exactamente igual a habitualAvgKcal.
-  const avgDailyIntakeKcal = habitualAvgKcal;
-
-  // Verificar requisitos de activación (mínimo 14 días de ventana y >= 4 días/semana -> >= 8 días en 2 sem o >= 12 en 3 sem)
-  const minRequiredLoggedDays = totalSpanDays >= 21 ? 12 : 8;
+  const referenceDate = params.referenceDate ?? localDate();
+  if (!Number.isInteger(windowDays) || windowDays < 14 || windowDays > 90 || !Number.isFinite(previousTdee) || previousTdee <= 0) throw new RangeError('Ventana o gasto previo inválido.');
+  const firstAllowedDate = addDays(referenceDate, -(windowDays-1));
+  const recentWeights = [...new Map(biometricLogs.filter(b => isCivilDate(b.date) && b.date >= firstAllowedDate && b.date <= referenceDate && Number.isFinite(b.trendWeightKg) && b.trendWeightKg > 0).map(b => [b.date,b])).values()].sort((a,b)=>a.date.localeCompare(b.date));
   const hasEnoughWeights = recentWeights.length >= 2;
-  let daySpanBetweenWeights = 0;
-
-  if (hasEnoughWeights) {
-    const firstDate = new Date(recentWeights[0].date).getTime();
-    const lastDate = new Date(recentWeights[recentWeights.length - 1].date).getTime();
-    daySpanBetweenWeights = Math.max(1, Math.round((lastDate - firstDate) / (1000 * 60 * 60 * 24)));
-  }
-
-  const isReadyForAdaptive =
-    daySpanBetweenWeights >= 13 && loggedDaysCount >= minRequiredLoggedDays && hasEnoughWeights;
+  const firstWeightDate = recentWeights[0]?.date ?? firstAllowedDate;
+  const lastWeightDate = recentWeights[recentWeights.length-1]?.date ?? referenceDate;
+  const daySpanBetweenWeights = hasEnoughWeights ? daysBetween(firstWeightDate,lastWeightDate) : 0;
+  // Morning-to-morning weight interval uses intake before the final weigh-in.
+  const recentIntakes = [...new Map(dailyIntakes.filter(d => isCivilDate(d.date) && d.date >= firstWeightDate && d.date < lastWeightDate).map(d=>[d.date,d])).values()];
+  const validLoggedIntakes = recentIntakes.filter((d): d is DailyNutritionSummary & {kcal:number} => d.isComplete === true && d.kcal !== null && Number.isFinite(d.kcal) && d.kcal > 0);
+  const loggedDaysCount = validLoggedIntakes.length;
+  const imputedDaysCount = Math.max(0,daySpanBetweenWeights-loggedDaysCount);
+  const avgDailyIntakeKcal = loggedDaysCount ? Math.round(validLoggedIntakes.reduce((sum,d)=>sum+d.kcal,0)/loggedDaysCount) : previousTdee;
+  const minRequiredLoggedDays = Math.max(8,Math.ceil(daySpanBetweenWeights*4/7));
+  const isReadyForAdaptive = hasEnoughWeights && daySpanBetweenWeights >= 13 && loggedDaysCount >= minRequiredLoggedDays && daysBetween(lastWeightDate,referenceDate) <= 3;
 
   if (!isReadyForAdaptive) {
     return {
       isReadyForAdaptive: false,
-      readinessMessage: `Calibrando motor adaptativo: ${daySpanBetweenWeights}/14+ días de biometría y ${loggedDaysCount}/${minRequiredLoggedDays} días nutricionales válidos (mín. 4 días/semana). Se mantiene el TDEE vigente (${previousTdee} kcal).`,
+      readinessMessage: `Calibrando motor adaptativo: ${daySpanBetweenWeights}/14+ días de biometría y ${loggedDaysCount}/${minRequiredLoggedDays} días nutricionales confirmados completos (mín. 4 días/semana). Se mantiene el TDEE vigente (${previousTdee} kcal).`,
       windowDays,
       loggedDaysCount,
       imputedDaysCount,
@@ -820,7 +800,7 @@ export function calculateAdaptiveTdee(params: {
   const weightChangeKgPerDay = (endTrendKg - startTrendKg) / daySpanBetweenWeights;
   const weightSlopeKgPerWeek = Number((weightChangeKgPerDay * 7).toFixed(3));
 
-  // Ecuación exacta: TDEE_Real = Promedio_Ingesta_Diaria_Kcal - (Cambio_Peso_Tendencia_Kg_Por_Dia * 7700)
+  // Aproximación de balance energético: TDEE estimado = Promedio_Ingesta_Diaria_Kcal - (Cambio_Peso_Tendencia_Kg_Por_Dia * 7700)
   const rawRealTdee =
     avgDailyIntakeKcal - weightChangeKgPerDay * KCAL_PER_KG_ADIPOSE_TISSUE;
   const calculatedRealTdee = Math.round(Math.max(900, Math.min(6500, rawRealTdee)));
