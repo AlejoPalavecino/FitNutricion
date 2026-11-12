@@ -1,3 +1,5 @@
+import { cloudWrite, type SyncResult } from './cloudOperation';
+import { reportCloudFailure } from '../store/useSyncStatusStore';
 import { supabase } from './supabaseClient';
 import type {
   BiologicalSex,
@@ -33,19 +35,7 @@ export function isValidUuid(val: string | undefined): boolean {
   return Boolean(val && UUID_REGEX.test(val));
 }
 
-export function generateUuid(): string {
-  if (
-    typeof crypto !== 'undefined' &&
-    typeof crypto.randomUUID === 'function'
-  ) {
-    return crypto.randomUUID();
-  }
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === 'x' ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
-}
+export { generateUuid } from '../lib/ids';
 
 export const LEGACY_SEED_ROUTINE_IDS = new Set([
   'routine-push-heavy',
@@ -120,6 +110,7 @@ export const cloudSyncService = {
         targetWaterMl: number;
       };
     } catch {
+      reportCloudFailure();
       return null;
     }
   },
@@ -204,6 +195,12 @@ export const cloudSyncService = {
           .eq('user_id', userId)
           .order('date', { ascending: false }),
       ]);
+
+      const responses = [profileRes, bioRes, customFoodsRes, tlRes, checkinsRes, routinesRes, sessionsRes];
+      if (responses.some((response) => response.error)) {
+        reportCloudFailure();
+        return null;
+      }
 
       const rawProfile = profileRes.data;
       const heightCm = Number(rawProfile?.height_cm ?? 170);
@@ -537,6 +534,7 @@ export const cloudSyncService = {
         workoutSessions,
       };
     } catch {
+      reportCloudFailure();
       return null;
     }
   },
@@ -544,10 +542,9 @@ export const cloudSyncService = {
   /**
    * Sincroniza `user_profiles` (3FN: solo atributos propios del perfil, sin columnas derivadas).
    */
-  async upsertUserProfile(userId: string, profile: UserProfile): Promise<void> {
-    if (!supabase || !isValidUuid(userId)) return;
-    try {
-      await supabase.from('user_profiles').upsert(
+  async upsertUserProfile(userId: string, profile: UserProfile): Promise<SyncResult> {
+    return cloudWrite(userId, async (client) => {
+      await client.from('user_profiles').upsert(
         {
           id: userId,
           name: profile.name,
@@ -567,18 +564,15 @@ export const cloudSyncService = {
           updated_at: new Date().toISOString(),
         },
         { onConflict: 'id' }
-      );
-    } catch {
-      // Mantiene copia local si no hay conexión
-    }
+      ).throwOnError();
+    });
   },
 
   /**
    * Sincroniza `biometric_logs` (3FN: sin `lbm_kg`, `fat_mass_kg` ni `whtr` redundantes).
    */
-  async upsertBiometricLog(userId: string, log: BiometricLog): Promise<void> {
-    if (!supabase || !isValidUuid(userId)) return;
-    try {
+  async upsertBiometricLog(userId: string, log: BiometricLog): Promise<SyncResult> {
+    return cloudWrite(userId, async (client) => {
       const payload: Record<string, unknown> = {
         user_id: userId,
         date: log.date,
@@ -596,21 +590,18 @@ export const cloudSyncService = {
         payload.id = log.id;
       }
 
-      await supabase
+      await client
         .from('biometric_logs')
-        .upsert(payload, { onConflict: 'user_id,date' });
-    } catch {
-      // Mantiene copia local
-    }
+        .upsert(payload, { onConflict: 'user_id,date' }).throwOnError();
+    });
   },
 
   /**
    * Sincroniza alimentos personalizados del usuario (`food_items`).
    */
-  async upsertCustomFood(userId: string, food: FoodItem): Promise<void> {
-    if (!supabase || !isValidUuid(userId)) return;
-    try {
-      await supabase.from('food_items').upsert(
+  async upsertCustomFood(userId: string, food: FoodItem): Promise<SyncResult> {
+    return cloudWrite(userId, async (client) => {
+      await client.from('food_items').upsert(
         {
           id: food.id,
           owner_user_id: userId,
@@ -629,18 +620,15 @@ export const cloudSyncService = {
           is_bridge_food: Boolean(food.isBridgeFood),
         },
         { onConflict: 'id' }
-      );
-    } catch {
-      // Mantiene copia local
-    }
+      ).throwOnError();
+    });
   },
 
   /**
    * Sincroniza `timeline_logs` (3FN: solo `food_id`/`recipe_id` y `grams_consumed`, sin `calculated_macros`).
    */
-  async insertTimelineLog(userId: string, log: TimelineLog): Promise<void> {
-    if (!supabase || !isValidUuid(userId)) return;
-    try {
+  async insertTimelineLog(userId: string, log: TimelineLog): Promise<SyncResult> {
+    return cloudWrite(userId, async (client) => {
       const payload: Record<string, unknown> = {
         user_id: userId,
         date: log.date,
@@ -654,12 +642,10 @@ export const cloudSyncService = {
         payload.id = log.id;
       }
 
-      await supabase
+      await client
         .from('timeline_logs')
-        .upsert(payload, { onConflict: 'id' });
-    } catch {
-      // Mantiene copia local
-    }
+        .upsert(payload, { onConflict: 'id' }).throwOnError();
+    });
   },
 
   /**
@@ -669,33 +655,27 @@ export const cloudSyncService = {
     userId: string,
     logId: string,
     gramsConsumed: number
-  ): Promise<void> {
-    if (!supabase || !isValidUuid(userId) || !isValidUuid(logId)) return;
-    try {
-      await supabase
+  ): Promise<SyncResult> {
+    return cloudWrite(userId, async (client) => {
+      await client
         .from('timeline_logs')
         .update({ grams_consumed: gramsConsumed })
         .eq('id', logId)
-        .eq('user_id', userId);
-    } catch {
-      // Mantiene copia local
-    }
+        .eq('user_id', userId).throwOnError();
+    });
   },
 
   /**
    * Elimina un registro de `timeline_logs`.
    */
-  async deleteTimelineLog(userId: string, logId: string): Promise<void> {
-    if (!supabase || !isValidUuid(userId) || !isValidUuid(logId)) return;
-    try {
-      await supabase
+  async deleteTimelineLog(userId: string, logId: string): Promise<SyncResult> {
+    return cloudWrite(userId, async (client) => {
+      await client
         .from('timeline_logs')
         .delete()
         .eq('id', logId)
-        .eq('user_id', userId);
-    } catch {
-      // Ignorar si es local
-    }
+        .eq('user_id', userId).throwOnError();
+    });
   },
 
   /**
@@ -704,9 +684,8 @@ export const cloudSyncService = {
   async insertMetabolicCheckin(
     userId: string,
     checkin: MetabolicCheckin
-  ): Promise<void> {
-    if (!supabase || !isValidUuid(userId)) return;
-    try {
+  ): Promise<SyncResult> {
+    return cloudWrite(userId, async (client) => {
       const payload: Record<string, unknown> = {
         user_id: userId,
         week_date: checkin.weekDate,
@@ -722,12 +701,10 @@ export const cloudSyncService = {
       if (isValidUuid(checkin.id)) {
         payload.id = checkin.id;
       }
-      await supabase
+      await client
         .from('metabolic_checkins')
-        .upsert(payload, { onConflict: 'id' });
-    } catch {
-      // Mantiene copia local
-    }
+        .upsert(payload, { onConflict: 'id' }).throwOnError();
+    });
   },
 
   /**
@@ -737,10 +714,9 @@ export const cloudSyncService = {
   async upsertWorkoutRoutine(
     userId: string,
     routine: WorkoutRoutine
-  ): Promise<void> {
-    if (!supabase || !isValidUuid(userId)) return;
-    try {
-      const { error: headerErr } = await supabase.from('workout_routines').upsert(
+  ): Promise<SyncResult> {
+    return cloudWrite(userId, async (client) => {
+      const { error: headerErr } = await client.from('workout_routines').upsert(
         {
           id: routine.id,
           user_id: userId,
@@ -748,31 +724,31 @@ export const cloudSyncService = {
           updated_at: new Date().toISOString(),
         },
         { onConflict: 'id' }
-      );
+      ).throwOnError();
 
-      if (headerErr) return;
+      if (headerErr) throw headerErr;
 
-      await supabase
+      await client
         .from('workout_routine_days')
         .delete()
-        .eq('routine_id', routine.id);
+        .eq('routine_id', routine.id).throwOnError();
 
       if (routine.assignedDays.length > 0) {
-        await supabase.from('workout_routine_days').insert(
+        await client.from('workout_routine_days').insert(
           routine.assignedDays.map((day) => ({
             routine_id: routine.id,
             day_of_week: day,
           }))
-        );
+        ).throwOnError();
       }
 
-      await supabase
+      await client
         .from('workout_routine_exercises')
         .delete()
-        .eq('routine_id', routine.id);
+        .eq('routine_id', routine.id).throwOnError();
 
       if (routine.exercises.length > 0) {
-        await supabase.from('workout_routine_exercises').insert(
+        await client.from('workout_routine_exercises').insert(
           routine.exercises.map((ex, idx) => ({
             routine_id: routine.id,
             exercise_id: ex.exerciseId,
@@ -786,11 +762,9 @@ export const cloudSyncService = {
             superset_group: ex.supersetGroupId ?? null,
             notes: ex.notes ?? null,
           }))
-        );
+        ).throwOnError();
       }
-    } catch {
-      // Mantiene copia local
-    }
+    });
   },
 
   /**
@@ -799,17 +773,14 @@ export const cloudSyncService = {
   async deleteWorkoutRoutine(
     userId: string,
     routineId: string
-  ): Promise<void> {
-    if (!supabase || !isValidUuid(userId)) return;
-    try {
-      await supabase
+  ): Promise<SyncResult> {
+    return cloudWrite(userId, async (client) => {
+      await client
         .from('workout_routines')
         .delete()
         .eq('id', routineId)
-        .eq('user_id', userId);
-    } catch {
-      // Ignorar si es local
-    }
+        .eq('user_id', userId).throwOnError();
+    });
   },
 
   /**
@@ -819,10 +790,9 @@ export const cloudSyncService = {
   async insertWorkoutSession(
     userId: string,
     session: WorkoutSession
-  ): Promise<void> {
-    if (!supabase || !isValidUuid(userId)) return;
-    try {
-      const { error: sessErr } = await supabase
+  ): Promise<SyncResult> {
+    return cloudWrite(userId, async (client) => {
+      const { error: sessErr } = await client
         .from('workout_sessions')
         .upsert(
           {
@@ -836,10 +806,11 @@ export const cloudSyncService = {
             bodyweight_kg_at_session: session.bodyweightKgAtSession,
           },
           { onConflict: 'id' }
-        );
+        ).throwOnError();
 
-      if (!sessErr && session.sets.length > 0) {
-        await supabase.from('workout_set_logs').upsert(
+      if (sessErr) throw sessErr;
+      if (session.sets.length > 0) {
+        await client.from('workout_set_logs').upsert(
           session.sets.map((s) => ({
             id: s.id,
             session_id: session.id,
@@ -854,11 +825,9 @@ export const cloudSyncService = {
             is_pr_1rm: s.isPr1RM,
           })),
           { onConflict: 'id' }
-        );
+        ).throwOnError();
       }
-    } catch {
-      // Mantiene copia local
-    }
+    });
   },
 
   /**
@@ -867,16 +836,14 @@ export const cloudSyncService = {
   async deleteWorkoutSession(
     userId: string,
     sessionId: string
-  ): Promise<void> {
-    if (!supabase || !isValidUuid(userId)) return;
-    try {
-      await supabase
+  ): Promise<SyncResult> {
+    return cloudWrite(userId, async (client) => {
+      await client
         .from('workout_sessions')
         .delete()
         .eq('id', sessionId)
-        .eq('user_id', userId);
-    } catch {
-      // Ignorar si es local
-    }
+        .eq('user_id', userId).throwOnError();
+    });
   },
+
 };

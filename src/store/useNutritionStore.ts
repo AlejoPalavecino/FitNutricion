@@ -1,3 +1,4 @@
+import { reportLocalFailure, useSyncStatusStore } from './useSyncStatusStore';
 import { create } from 'zustand';
 import type {
   BiologicalSex,
@@ -214,6 +215,8 @@ export interface NutritionState {
   ) => ExerciseCatalogItem;
 }
 
+let sessionGeneration = 0;
+
 const getTodayIso = () => new Date().toISOString().slice(0, 10);
 
 const LEGACY_STORAGE_KEYS = [
@@ -339,10 +342,10 @@ function persistCurrentUserState(state: NutritionState): void {
     deletedRecordIds: state.deletedRecordIds,
   };
 
-  void offlineFirstStorage.setItem(
+  void Promise.resolve(offlineFirstStorage.setItem(
     getUserStorageKey(state.activeUserId),
     JSON.stringify(snapshot)
-  );
+  )).catch(reportLocalFailure);
 }
 
 export const useNutritionStore = create<NutritionState>()((set, get) => ({
@@ -366,7 +369,9 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
   deletedRecordIds: [],
 
   initializeForUser: async (user, options) => {
+    const generation = ++sessionGeneration;
     await purgeLegacyGlobalMockStorage();
+    if (generation !== sessionGeneration) return;
 
     const isNewRegistration = Boolean(options?.isNewRegistration);
 
@@ -429,6 +434,7 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
       localSnapshot = sanitizeSnapshot(null, user);
     }
 
+    if (generation !== sessionGeneration || get().activeUserId !== user.id) return;
     const favSet = new Set(localSnapshot.favoriteFoodIds);
     const mergedFoods = [
       ...localSnapshot.customFoods,
@@ -469,6 +475,7 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
       mergedRecipes
     );
 
+    if (generation !== sessionGeneration || get().activeUserId !== user.id) return;
     if (cloudData) {
       const current = get();
       const deletedSet = new Set(current.deletedRecordIds);
@@ -610,6 +617,8 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
   },
 
   clearActiveSessionState: () => {
+    sessionGeneration += 1;
+    useSyncStatusStore.getState().reset();
     set({
       activeUserId: null,
       activeUserFullName: null,
@@ -766,11 +775,11 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
     persistCurrentUserState(get());
 
     if (state.activeUserId) {
-      void cloudSyncService.upsertUserProfile(state.activeUserId, newProfile);
-      void cloudSyncService.upsertBiometricLog(
-        state.activeUserId,
-        latestBioEntry
-      );
+      const ownerId = state.activeUserId;
+      void (async () => {
+        const result = await cloudSyncService.upsertUserProfile(ownerId, newProfile);
+        if (result.status !== 'error') await cloudSyncService.upsertBiometricLog(ownerId, latestBioEntry);
+      })();
     }
   },
 
@@ -953,10 +962,10 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
     persistCurrentUserState(get());
 
     if (state.activeUserId) {
-      void cloudSyncService.upsertBiometricLog(
-        state.activeUserId,
-        latestTrendEntry
-      );
+      // A backdated correction changes that row AND subsequent EWMA values.
+      for (const changedLog of recalculated.filter((log) => log.date >= targetDate)) {
+        void cloudSyncService.upsertBiometricLog(state.activeUserId, changedLog);
+      }
       void cloudSyncService.upsertUserProfile(
         state.activeUserId,
         updatedProfile
@@ -1430,6 +1439,9 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
       const isEffective = s.isCompleted && s.setType !== 'warmup';
       return {
         ...s,
+        // Materialize a new persisted entity even when recovering a legacy draft.
+        // This ID is generated once here and reused by every sync retry.
+        id: generateUuid(),
         estimated1RM,
         isPrWeight: isEffective && s.weightKg > bestPrev.maxWeightKg,
         isPr1RM: isEffective && estimated1RM > bestPrev.max1RMKg,
@@ -1439,7 +1451,7 @@ export const useNutritionStore = create<NutritionState>()((set, get) => ({
     const totalVolumeKg = calculateSessionTonnageKg(processedSets);
 
     const newSession: WorkoutSession = {
-      id: `ws-${sessionDate}-${Date.now()}`,
+      id: generateUuid(),
       routineId: payload.routineId,
       routineName: payload.routineName || 'Sesión de Fuerza',
       date: sessionDate,

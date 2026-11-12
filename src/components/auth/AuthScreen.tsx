@@ -121,13 +121,13 @@ export const AuthScreen: React.FC = () => {
           </div>
 
           {errorMessage && (
-            <div className="mb-5 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-semibold text-rose-800">
+            <div role="alert" className="mb-5 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-semibold text-rose-800">
               {errorMessage}
             </div>
           )}
 
           {infoMessage && (
-            <div className="mb-5 flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-semibold text-emerald-800">
+            <div role="status" className="mb-5 flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-semibold text-emerald-800">
               <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
               <span>{infoMessage}</span>
             </div>
@@ -136,7 +136,7 @@ export const AuthScreen: React.FC = () => {
           <form onSubmit={handleSubmit} className="space-y-4" noValidate>
             {mode === 'register' && (
               <div>
-                <label className="mb-1.5 block text-xs font-bold text-slate-700">
+                <label htmlFor="full-name" className="mb-1.5 block text-xs font-bold text-slate-700">
                   Tu nombre
                 </label>
                 <div className="relative">
@@ -145,6 +145,7 @@ export const AuthScreen: React.FC = () => {
                     type="text"
                     required
                     autoComplete="name"
+                    id="full-name"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
                     placeholder="Tu nombre"
@@ -155,7 +156,7 @@ export const AuthScreen: React.FC = () => {
             )}
 
             <div>
-              <label className="mb-1.5 block text-xs font-bold text-slate-700">
+              <label htmlFor="email" className="mb-1.5 block text-xs font-bold text-slate-700">
                 Correo electrónico
               </label>
               <div className="relative">
@@ -164,6 +165,7 @@ export const AuthScreen: React.FC = () => {
                   type="email"
                   required
                   autoComplete="email"
+                  id="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="tucorreo@ejemplo.com"
@@ -173,7 +175,7 @@ export const AuthScreen: React.FC = () => {
             </div>
 
             <div>
-              <label className="mb-1.5 block text-xs font-bold text-slate-700">
+              <label htmlFor="password" className="mb-1.5 block text-xs font-bold text-slate-700">
                 Contraseña
               </label>
               <div className="relative">
@@ -184,6 +186,7 @@ export const AuthScreen: React.FC = () => {
                   autoComplete={
                     mode === 'login' ? 'current-password' : 'new-password'
                   }
+                  id="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Mínimo 8 caracteres"
@@ -229,7 +232,7 @@ export const AuthScreen: React.FC = () => {
 
             {mode === 'register' && (
               <div>
-                <label className="mb-1.5 block text-xs font-bold text-slate-700">
+                <label htmlFor="confirm-password" className="mb-1.5 block text-xs font-bold text-slate-700">
                   Repetir contraseña
                 </label>
                 <div className="relative">
@@ -238,6 +241,7 @@ export const AuthScreen: React.FC = () => {
                     type={showPassword ? 'text' : 'password'}
                     required
                     autoComplete="new-password"
+                    id="confirm-password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="Repite tu contraseña"
@@ -257,7 +261,7 @@ export const AuthScreen: React.FC = () => {
                   ? 'Verificando...'
                   : mode === 'login'
                   ? 'Entrar a mi cuenta'
-                  : 'Crear mi cuenta segura'}
+                  : 'Crear mi cuenta'}
               </span>
               <ArrowRight className="h-4 w-4" />
             </button>
@@ -269,8 +273,8 @@ export const AuthScreen: React.FC = () => {
           <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-600" />
           <span>
             {isCloudActive
-              ? 'Conectado a Supabase Cloud con protección RLS por usuario'
-              : 'Datos protegidos con cifrado SHA-256 y aislamiento de sesión'}
+              ? 'Modo nube configurado. El estado de sincronización se muestra dentro de la aplicación.'
+              : 'Modo local: datos sin cifrar en este navegador. No uses un dispositivo compartido.'}
           </span>
         </div>
       </div>

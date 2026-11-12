@@ -302,7 +302,7 @@ CREATE TABLE IF NOT EXISTS workout_set_logs (
 -- ============================================================================
 
 -- Vista de Biometría con Masa Grasa, Masa Magra y WHtR calculados al vuelo
-CREATE OR REPLACE VIEW v_biometric_logs_computed AS
+CREATE OR REPLACE VIEW v_biometric_logs_computed WITH (security_invoker = true) AS
 SELECT
   b.*,
   ROUND((b.scale_weight_kg * (b.estimated_bf_percent / 100.0))::NUMERIC, 2) AS fat_mass_kg,
@@ -316,7 +316,7 @@ FROM biometric_logs b
 JOIN user_profiles u ON u.id = b.user_id;
 
 -- Vista de Totales de Macronutrientes por Receta (calculados desde recipe_ingredients N:M)
-CREATE OR REPLACE VIEW v_recipe_totals AS
+CREATE OR REPLACE VIEW v_recipe_totals WITH (security_invoker = true) AS
 SELECT
   ri.recipe_id,
   ROUND(SUM(ri.grams)::NUMERIC, 1) AS total_grams,
@@ -330,7 +330,7 @@ JOIN food_items f ON f.id = ri.food_id
 GROUP BY ri.recipe_id;
 
 -- Vista de Series con 1RM estimado calculado dinámicamente
-CREATE OR REPLACE VIEW v_workout_set_logs_computed AS
+CREATE OR REPLACE VIEW v_workout_set_logs_computed WITH (security_invoker = true) AS
 SELECT
   s.*,
   CASE
@@ -341,7 +341,7 @@ SELECT
 FROM workout_set_logs s;
 
 -- Vista de Sesiones con nombre de rutina (por JOIN) y volumen total efectivo calculado
-CREATE OR REPLACE VIEW v_workout_sessions_summary AS
+CREATE OR REPLACE VIEW v_workout_sessions_summary WITH (security_invoker = true) AS
 SELECT
   ws.id,
   ws.user_id,

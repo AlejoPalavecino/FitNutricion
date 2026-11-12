@@ -3,7 +3,7 @@ import type { StateStorage } from 'zustand/middleware';
 
 /**
  * Adaptador de almacenamiento Offline-First híbrido (IndexedDB + espejo rápido en LocalStorage).
- * Garantiza latencia cero en lecturas/escrituras y soporte de grandes catálogos de alimentos/logs.
+ * Los errores de escritura se propagan cuando no existe una copia durable.
  */
 export const offlineFirstStorage: StateStorage = {
   getItem: async (name: string): Promise<string | null> => {
@@ -24,20 +24,14 @@ export const offlineFirstStorage: StateStorage = {
     }
   },
   setItem: async (name: string, value: string): Promise<void> => {
+    let stored = false;
     try {
-      if (typeof localStorage !== 'undefined') {
-        localStorage.setItem(name, value);
-      }
-    } catch {
-      // Ignorar errores de cuota en LocalStorage
-    }
+      if (typeof localStorage !== 'undefined') { localStorage.setItem(name, value); stored = true; }
+    } catch { /* IndexedDB may still accept the write. */ }
     try {
-      if (typeof indexedDB !== 'undefined') {
-        await set(name, value);
-      }
-    } catch {
-      // Ignorar si IndexedDB no está disponible en el entorno actual
-    }
+      if (typeof indexedDB !== 'undefined') { await set(name, value); stored = true; }
+    } catch { /* The caller is notified if neither store succeeded. */ }
+    if (!stored) throw new Error('No durable browser storage is available.');
   },
   removeItem: async (name: string): Promise<void> => {
     try {
