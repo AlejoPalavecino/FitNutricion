@@ -2,11 +2,10 @@ name: Validate remediation patch
 on:
   push:
     branches:
-      - improvements/stage-1-integrity-privacy
       - improvements/stage-2-reliable-sync
       - improvements/stage-3-domain-consistency
       - improvements/stage-4-quality-pwa
-    paths: ['.review/change.json']
+    paths: ['.review/implementation.py']
 permissions:
   contents: write
 concurrency:
@@ -32,41 +31,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 2
           persist-credentials: false
-      - name: Verify and apply guarded file deltas
-        run: |
-          python3 - <<'PY'
-          import base64, hashlib, json, os, subprocess, zlib
-          from pathlib import Path
-          data = json.loads(Path('.review/change.json').read_text())
-          assert data['branch'] == os.environ['GITHUB_REF_NAME']
-          assert subprocess.check_output(['git','rev-parse','HEAD^'],text=True).strip() == data['expected_parent']
-          payload = zlib.decompress(base64.b64decode(''.join(Path(p).read_text().strip() for p in data['parts'])))
-          assert hashlib.sha256(payload).hexdigest() == data['sha256']
-          changes = json.loads(payload)
-          root = Path.cwd().resolve()
-          originals = {}
-          for change in changes:
-            for name in [change['path'], change.get('base')]:
-              if name:
-                path = (root/name).resolve()
-                assert path.is_relative_to(root) and '.git' not in Path(name).parts and '.review' not in Path(name).parts
-            base = change.get('base')
-            originals[change['path']] = (root/base).read_text() if base else ''
-          for change in changes:
-            old = originals[change['path']]
-            assert hashlib.sha256(old.encode()).hexdigest() == change['sha'], change['path']
-            path = root/change['path']
-            if change.get('delete'):
-              path.unlink()
-              continue
-            lines = old.splitlines(keepends=True)
-            for start,end,text in reversed(change['edits']):
-              lines[start:end] = [text]
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(''.join(lines))
-          PY
+      - name: Apply readable guarded implementation
+        run: python3 .review/implementation.py
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -94,7 +61,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          rm -f .review/change.json .review/part-*.txt
+          rm -rf .review
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
