@@ -1,16 +1,8 @@
+import { ArrowRight, CheckCircle2, Eye, EyeOff, Lock, Mail, ShieldCheck, User } from 'lucide-react';
 import React, { useMemo, useState } from 'react';
-import {
-  ArrowRight,
-  CheckCircle2,
-  Eye,
-  EyeOff,
-  Lock,
-  Mail,
-  ShieldCheck,
-  User,
-} from 'lucide-react';
-import { useAuthStore } from '../../store/useAuthStore';
+import { requestPasswordRecovery } from '../../services/passwordRecovery';
 import { validatePasswordPolicy } from '../../services/securityService';
+import { useAuthStore } from '../../store/useAuthStore';
 
 export const AuthScreen: React.FC = () => {
   const login = useAuthStore((s) => s.login);
@@ -27,10 +19,7 @@ export const AuthScreen: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
 
-  const passwordCheck = useMemo(
-    () => validatePasswordPolicy(password),
-    [password]
-  );
+  const passwordCheck = useMemo(() => validatePasswordPolicy(password), [password]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,9 +39,7 @@ export const AuthScreen: React.FC = () => {
       }
 
       if (res.requiresEmailConfirmation) {
-        setInfoMessage(
-          '¡Cuenta creada! Revisa tu correo electrónico para confirmar tu acceso.'
-        );
+        setInfoMessage('¡Cuenta creada! Revisa tu correo electrónico para confirmar tu acceso.');
         setMode('login');
       }
       return;
@@ -121,13 +108,19 @@ export const AuthScreen: React.FC = () => {
           </div>
 
           {errorMessage && (
-            <div role="alert" className="mb-5 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-semibold text-rose-800">
+            <div
+              role="alert"
+              className="mb-5 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-semibold text-rose-800"
+            >
               {errorMessage}
             </div>
           )}
 
           {infoMessage && (
-            <div role="status" className="mb-5 flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-semibold text-emerald-800">
+            <div
+              role="status"
+              className="mb-5 flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-semibold text-emerald-800"
+            >
               <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
               <span>{infoMessage}</span>
             </div>
@@ -136,7 +129,10 @@ export const AuthScreen: React.FC = () => {
           <form onSubmit={handleSubmit} className="space-y-4" noValidate>
             {mode === 'register' && (
               <div>
-                <label htmlFor="full-name" className="mb-1.5 block text-xs font-bold text-slate-700">
+                <label
+                  htmlFor="full-name"
+                  className="mb-1.5 block text-xs font-bold text-slate-700"
+                >
                   Tu nombre
                 </label>
                 <div className="relative">
@@ -183,9 +179,7 @@ export const AuthScreen: React.FC = () => {
                 <input
                   type={showPassword ? 'text' : 'password'}
                   required
-                  autoComplete={
-                    mode === 'login' ? 'current-password' : 'new-password'
-                  }
+                  autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
                   id="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -198,11 +192,7 @@ export const AuthScreen: React.FC = () => {
                   className="absolute top-3 right-3 rounded-lg p-1 text-slate-400 hover:text-slate-700"
                   title={showPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
                 >
-                  {showPassword ? (
-                    <EyeOff className="h-4 w-4" />
-                  ) : (
-                    <Eye className="h-4 w-4" />
-                  )}
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
 
@@ -223,16 +213,17 @@ export const AuthScreen: React.FC = () => {
                       />
                     ))}
                   </div>
-                  <p className="text-[11px] font-medium text-slate-500">
-                    {passwordCheck.feedback}
-                  </p>
+                  <p className="text-[11px] font-medium text-slate-500">{passwordCheck.feedback}</p>
                 </div>
               )}
             </div>
 
             {mode === 'register' && (
               <div>
-                <label htmlFor="confirm-password" className="mb-1.5 block text-xs font-bold text-slate-700">
+                <label
+                  htmlFor="confirm-password"
+                  className="mb-1.5 block text-xs font-bold text-slate-700"
+                >
                   Repetir contraseña
                 </label>
                 <div className="relative">
@@ -260,12 +251,36 @@ export const AuthScreen: React.FC = () => {
                 {isSubmitting
                   ? 'Verificando...'
                   : mode === 'login'
-                  ? 'Entrar a mi cuenta'
-                  : 'Crear mi cuenta'}
+                    ? 'Entrar a mi cuenta'
+                    : 'Crear mi cuenta'}
               </span>
               <ArrowRight className="h-4 w-4" />
             </button>
           </form>
+          {isCloudActive ? (
+            <button
+              type="button"
+              className="mt-4 text-sm underline"
+              disabled={isSubmitting}
+              onClick={async () => {
+                try {
+                  setInfoMessage(await requestPasswordRecovery(email));
+                } catch (error) {
+                  setErrorMessage(
+                    error instanceof Error
+                      ? error.message
+                      : 'No se pudo solicitar la recuperación.',
+                  );
+                }
+              }}
+            >
+              Olvidé mi contraseña
+            </button>
+          ) : (
+            <p className="mt-4 text-xs">
+              La cuenta local solo existe en este navegador y no tiene recuperación por correo.
+            </p>
+          )}
         </div>
 
         {/* Sello de Privacidad y Seguridad */}

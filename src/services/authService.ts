@@ -1,5 +1,9 @@
-import { createLocalCredential, verifyLocalCredential, verifyLegacyCredential, type LocalCredential } from './localCredentials';
-import { supabase } from './supabaseClient';
+import {
+  createLocalCredential,
+  verifyLegacyCredential,
+  verifyLocalCredential,
+  type LocalCredential,
+} from './localCredentials';
 import {
   clearSensitiveUserStorage,
   isValidEmail,
@@ -8,6 +12,7 @@ import {
   sanitizeText,
   validatePasswordPolicy,
 } from './securityService';
+import { supabase } from './supabaseClient';
 
 export interface AuthenticatedUser {
   id: string;
@@ -40,7 +45,15 @@ function readLocalAccounts(): LocalVaultUserRecord[] {
     const raw = localStorage.getItem(LOCAL_VAULT_ACCOUNTS_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter((entry) => entry && typeof entry.id === 'string' && typeof entry.email === 'string' && typeof entry.fullName === 'string') : [];
+    return Array.isArray(parsed)
+      ? parsed.filter(
+          (entry) =>
+            entry &&
+            typeof entry.id === 'string' &&
+            typeof entry.email === 'string' &&
+            typeof entry.fullName === 'string',
+        )
+      : [];
   } catch {
     return [];
   }
@@ -63,8 +76,9 @@ export const authService = {
       return {
         id: u.id,
         email: u.email ?? '',
-        fullName:
-          sanitizeText(String(u.user_metadata?.full_name ?? u.email?.split('@')[0] ?? 'Usuario')),
+        fullName: sanitizeText(
+          String(u.user_metadata?.full_name ?? u.email?.split('@')[0] ?? 'Usuario'),
+        ),
         authMode: 'cloud',
       };
     }
@@ -73,8 +87,14 @@ export const authService = {
       const rawSession = localStorage.getItem(LOCAL_ACTIVE_SESSION_KEY);
       if (!rawSession) return null;
       const parsed = JSON.parse(rawSession) as AuthenticatedUser;
-      if (parsed?.id && parsed?.email && parsed.authMode === 'local_vault' &&
-          readLocalAccounts().some((account) => account.id === parsed.id && account.email === parsed.email)) {
+      if (
+        parsed?.id &&
+        parsed?.email &&
+        parsed.authMode === 'local_vault' &&
+        readLocalAccounts().some(
+          (account) => account.id === parsed.id && account.email === parsed.email,
+        )
+      ) {
         return { ...parsed, fullName: sanitizeText(parsed.fullName) };
       }
       return null;
@@ -195,10 +215,7 @@ export const authService = {
   /**
    * Inicia sesión verificando credenciales de forma segura.
    */
-  async loginWithEmail(params: {
-    email: string;
-    password: string;
-  }): Promise<AuthOperationResult> {
+  async loginWithEmail(params: { email: string; password: string }): Promise<AuthOperationResult> {
     const cleanEmail = sanitizeEmail(params.email);
 
     if (!isValidEmail(cleanEmail) || !params.password) {
@@ -228,10 +245,8 @@ export const authService = {
           email: data.user.email ?? cleanEmail,
           fullName: sanitizeText(
             String(
-              data.user.user_metadata?.full_name ??
-                data.user.email?.split('@')[0] ??
-                'Usuario'
-            )
+              data.user.user_metadata?.full_name ?? data.user.email?.split('@')[0] ?? 'Usuario',
+            ),
           ),
           authMode: 'cloud',
         },
@@ -240,9 +255,11 @@ export const authService = {
 
     const accounts = readLocalAccounts();
     const matched = accounts.find((account) => account.email === cleanEmail);
-    const valid = matched && (matched.credential
-      ? await verifyLocalCredential(params.password, matched.credential)
-      : await verifyLegacyCredential(cleanEmail, params.password, matched.passwordHashHex ?? ''));
+    const valid =
+      matched &&
+      (matched.credential
+        ? await verifyLocalCredential(params.password, matched.credential)
+        : await verifyLegacyCredential(cleanEmail, params.password, matched.passwordHashHex ?? ''));
 
     if (!matched || !valid) {
       return {

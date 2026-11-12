@@ -1,5 +1,3 @@
-import { SyncStatusBanner } from './components/navigation/SyncStatusBanner';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
   Check,
@@ -11,17 +9,35 @@ import {
   SlidersHorizontal,
   Utensils,
 } from 'lucide-react';
-import { useNutritionStore } from './store/useNutritionStore';
-import { useAuthStore } from './store/useAuthStore';
+import React, { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { AuthScreen } from './components/auth/AuthScreen';
-import { OnboardingDiagnostic } from './components/onboarding/OnboardingDiagnostic';
-import { BiometricCheckinView } from './components/onboarding/BiometricCheckinView';
-import { NutritionDashboard } from './components/dashboard/NutritionDashboard';
-import { OpenGymHub } from './components/gym/OpenGymHub';
-import {
-  QuickActionCommand,
-  type MainAppTab,
-} from './components/navigation/QuickActionCommand';
+import { RecoveryScreen } from './components/auth/RecoveryScreen';
+import { AccountActions } from './components/navigation/AccountActions';
+import { PwaStatus } from './components/navigation/PwaStatus';
+import { QuickActionCommand, type MainAppTab } from './components/navigation/QuickActionCommand';
+import { SyncStatusBanner } from './components/navigation/SyncStatusBanner';
+import { envConfig } from './config/env';
+import { subscribeAuthLifecycle } from './services/authLifecycle';
+import { useAuthStore } from './store/useAuthStore';
+import { useNutritionStore } from './store/useNutritionStore';
+const OnboardingDiagnostic = lazy(() =>
+  import('./components/onboarding/OnboardingDiagnostic').then((m) => ({
+    default: m.OnboardingDiagnostic,
+  })),
+);
+const BiometricCheckinView = lazy(() =>
+  import('./components/onboarding/BiometricCheckinView').then((m) => ({
+    default: m.BiometricCheckinView,
+  })),
+);
+const NutritionDashboard = lazy(() =>
+  import('./components/dashboard/NutritionDashboard').then((m) => ({
+    default: m.NutritionDashboard,
+  })),
+);
+const OpenGymHub = lazy(() =>
+  import('./components/gym/OpenGymHub').then((m) => ({ default: m.OpenGymHub })),
+);
 
 const PHASE_NAMES_SIMPLE: Record<string, string> = {
   cut: 'Bajar Grasa',
@@ -31,6 +47,8 @@ const PHASE_NAMES_SIMPLE: Record<string, string> = {
 };
 
 export function App() {
+  const isRecovering = useAuthStore((s) => s.isRecovering);
+  const initializationError = useAuthStore((s) => s.initializationError);
   const currentUser = useAuthStore((s) => s.currentUser);
   const isInitialized = useAuthStore((s) => s.isInitialized);
   const initializeAuth = useAuthStore((s) => s.initializeAuth);
@@ -42,18 +60,18 @@ export function App() {
   const workoutRoutines = useNutritionStore((s) => s.workoutRoutines);
   const workoutSessions = useNutritionStore((s) => s.workoutSessions);
   const selectedDate = useNutritionStore((s) => s.selectedDate);
-  const addOrUpdateBiometricLog = useNutritionStore(
-    (s) => s.addOrUpdateBiometricLog
-  );
+  const addOrUpdateBiometricLog = useNutritionStore((s) => s.addOrUpdateBiometricLog);
 
   useEffect(() => {
-    void initializeAuth();
+    const unsubscribe = subscribeAuthLifecycle();
+    if (!envConfig.configurationError) void initializeAuth();
+    return unsubscribe;
   }, [initializeAuth]);
 
   const hasCompletedOnboarding = Boolean(userProfile?.onboardingCompleted);
 
   const [activeTab, setActiveTab] = useState<MainAppTab>(
-    hasCompletedOnboarding ? 'gym' : 'onboarding'
+    hasCompletedOnboarding ? 'gym' : 'onboarding',
   );
   const hasAutoRedirected = useRef(hasCompletedOnboarding);
 
@@ -80,7 +98,7 @@ export function App() {
   }, [biometricLogs]);
 
   const [headerWeightInput, setHeaderWeightInput] = useState<number>(
-    latestBio?.scaleWeightKg ?? 70
+    latestBio?.scaleWeightKg ?? 70,
   );
   const [weightSavedToast, setWeightSavedToast] = useState(false);
 
@@ -107,20 +125,15 @@ export function App() {
 
   const todayStats = useMemo(() => {
     const logsToday = timelineLogs.filter((l) => l.date === selectedDate);
-    const consumedKcal = logsToday.reduce(
-      (sum, item) => sum + item.calculatedMacros.kcal,
-      0
-    );
+    const consumedKcal = logsToday.reduce((sum, item) => sum + item.calculatedMacros.kcal, 0);
     const consumedProtein = Math.round(
-      logsToday.reduce((sum, item) => sum + item.calculatedMacros.proteinG, 0)
+      logsToday.reduce((sum, item) => sum + item.calculatedMacros.proteinG, 0),
     );
     const targetKcal = userProfile?.targetKcal ?? 0;
     const targetProtein = userProfile?.targetProteinG ?? 0;
     const remainingProtein = Math.max(0, targetProtein - consumedProtein);
 
-    const sessionsToday = workoutSessions.filter(
-      (s) => s.date === selectedDate
-    );
+    const sessionsToday = workoutSessions.filter((s) => s.date === selectedDate);
     const setsToday = sessionsToday.reduce((sum, s) => sum + s.sets.length, 0);
 
     return {
@@ -142,6 +155,19 @@ export function App() {
     }, 1000);
   };
 
+  if (envConfig.configurationError)
+    return (
+      <main role="alert" className="p-6">
+        {envConfig.configurationError}
+      </main>
+    );
+  if (isRecovering) return <RecoveryScreen />;
+  if (initializationError)
+    return (
+      <main role="alert" className="p-6">
+        {initializationError}
+      </main>
+    );
   if (!isInitialized) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50 text-sm font-semibold text-slate-500">
@@ -151,13 +177,19 @@ export function App() {
   }
 
   if (!currentUser) {
-    return <AuthScreen />;
+    return (
+      <>
+        <PwaStatus />
+        <AuthScreen />
+      </>
+    );
   }
 
   const displayName = userProfile?.name || currentUser.fullName;
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
+      <PwaStatus />
       {/* ====================================================================
           BARRA SUPERIOR CLARA, LIMPIA Y FÁCIL DE ENTENDER
          ==================================================================== */}
@@ -167,17 +199,11 @@ export function App() {
           <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={() =>
-                setActiveTab(hasCompletedOnboarding ? 'gym' : 'onboarding')
-              }
+              onClick={() => setActiveTab(hasCompletedOnboarding ? 'gym' : 'onboarding')}
               className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs transition hover:scale-105 hover:border-emerald-300"
               title="FitNutrición"
             >
-              <img
-                src="/logo.jpg"
-                alt="Logo FitNutrición"
-                className="h-full w-full object-cover"
-              />
+              <img src="/logo.jpg" alt="Logo FitNutrición" className="h-full w-full object-cover" />
             </button>
             <div>
               <div className="flex items-center gap-2">
@@ -195,9 +221,7 @@ export function App() {
                 )}
               </div>
               {displayName && (
-                <div className="text-xs font-semibold text-slate-500">
-                  Hola, {displayName}
-                </div>
+                <div className="text-xs font-semibold text-slate-500">Hola, {displayName}</div>
               )}
             </div>
           </div>
@@ -225,19 +249,13 @@ export function App() {
                     title="Anotar mi peso de hoy"
                   >
                     <Scale className="h-4 w-4 text-emerald-600" />
-                    <span>
-                      {latestBio
-                        ? `${latestBio.scaleWeightKg.toFixed(1)} kg`
-                        : 'Peso'}
-                    </span>
+                    <span>{latestBio ? `${latestBio.scaleWeightKg.toFixed(1)} kg` : 'Peso'}</span>
                   </button>
 
                   {isWeightPopoverOpen && (
                     <div className="absolute right-0 mt-2 w-64 rounded-2xl border border-slate-200 bg-white p-4 shadow-xl">
                       <div className="mb-2 flex items-center justify-between text-xs">
-                        <span className="font-bold text-slate-800">
-                          Tu peso de hoy
-                        </span>
+                        <span className="font-bold text-slate-800">Tu peso de hoy</span>
                         <button
                           type="button"
                           onClick={() => setIsWeightPopoverOpen(false)}
@@ -246,17 +264,12 @@ export function App() {
                           Cerrar
                         </button>
                       </div>
-                      <form
-                        onSubmit={handleQuickSaveWeight}
-                        className="space-y-2.5"
-                      >
+                      <form onSubmit={handleQuickSaveWeight} className="space-y-2.5">
                         <div className="flex items-center gap-1.5">
                           <button
                             type="button"
                             onClick={() =>
-                              setHeaderWeightInput((w) =>
-                                Number((w - 0.2).toFixed(1))
-                              )
+                              setHeaderWeightInput((w) => Number((w - 0.2).toFixed(1)))
                             }
                             className="rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-100"
                           >
@@ -266,17 +279,13 @@ export function App() {
                             type="number"
                             step={0.1}
                             value={headerWeightInput}
-                            onChange={(e) =>
-                              setHeaderWeightInput(Number(e.target.value))
-                            }
+                            onChange={(e) => setHeaderWeightInput(Number(e.target.value))}
                             className="w-full rounded-xl border border-slate-200 bg-slate-50 px-2 py-2 text-center text-base font-bold text-slate-900 focus:border-emerald-500 focus:bg-white focus:outline-none"
                           />
                           <button
                             type="button"
                             onClick={() =>
-                              setHeaderWeightInput((w) =>
-                                Number((w + 0.2).toFixed(1))
-                              )
+                              setHeaderWeightInput((w) => Number((w + 0.2).toFixed(1)))
                             }
                             className="rounded-xl border border-slate-200 bg-slate-50 px-2.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-100"
                           >
@@ -437,20 +446,27 @@ export function App() {
 
       <SyncStatusBanner />
       {/* Contenido Principal */}
+      <AccountActions />
       <main className="pb-24">
-        {activeTab === 'onboarding' && (
-          <OnboardingDiagnostic
-            isReconfiguring={Boolean(userProfile)}
-            onCompleted={() => setActiveTab('gym')}
-          />
-        )}
-        {activeTab === 'nutrition' && <NutritionDashboard />}
-        {activeTab === 'gym' && <OpenGymHub />}
-        {activeTab === 'biometrics' && (
-          <BiometricCheckinView
-            onOpenReconfigure={() => setActiveTab('onboarding')}
-          />
-        )}
+        <Suspense
+          fallback={
+            <p role="status" className="p-6">
+              Cargando pantalla...
+            </p>
+          }
+        >
+          {activeTab === 'onboarding' && (
+            <OnboardingDiagnostic
+              isReconfiguring={Boolean(userProfile)}
+              onCompleted={() => setActiveTab('gym')}
+            />
+          )}
+          {activeTab === 'nutrition' && <NutritionDashboard />}
+          {activeTab === 'gym' && <OpenGymHub />}
+          {activeTab === 'biometrics' && (
+            <BiometricCheckinView onOpenReconfigure={() => setActiveTab('onboarding')} />
+          )}
+        </Suspense>
       </main>
 
       {/* Barra Inferior para Móviles */}

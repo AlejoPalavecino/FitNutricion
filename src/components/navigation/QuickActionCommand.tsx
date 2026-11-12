@@ -1,5 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import {
   Check,
   ChefHat,
@@ -11,13 +10,16 @@ import {
   Utensils,
   X,
 } from 'lucide-react';
-import { useNutritionStore } from '../../store/useNutritionStore';
+import React, { useEffect, useMemo, useState } from 'react';
+import { generateUuid } from '../../lib/ids';
 import {
   calculateFoodItemMacros,
   calculateRemainingMacros,
   suggestBridgeFoods,
 } from '../../lib/metabolism';
+import { useNutritionStore } from '../../store/useNutritionStore';
 import type { NutritionalPhase } from '../../types/nutrition';
+import { useDialogFocus } from '../useDialogFocus';
 
 export type MainAppTab = 'onboarding' | 'nutrition' | 'gym' | 'biometrics';
 
@@ -49,9 +51,7 @@ export const QuickActionCommand: React.FC<QuickActionCommandProps> = ({
   const selectedDate = useNutritionStore((s) => s.selectedDate);
 
   const addTimelineLog = useNutritionStore((s) => s.addTimelineLog);
-  const addOrUpdateBiometricLog = useNutritionStore(
-    (s) => s.addOrUpdateBiometricLog
-  );
+  const addOrUpdateBiometricLog = useNutritionStore((s) => s.addOrUpdateBiometricLog);
   const updatePhaseAndMacros = useNutritionStore((s) => s.updatePhaseAndMacros);
   const addExerciseToRoutine = useNutritionStore((s) => s.addExerciseToRoutine);
   const saveWorkoutRoutine = useNutritionStore((s) => s.saveWorkoutRoutine);
@@ -61,9 +61,7 @@ export const QuickActionCommand: React.FC<QuickActionCommandProps> = ({
   const [quickToast, setQuickToast] = useState<string | null>(null);
 
   const latestBio = biometricLogs[biometricLogs.length - 1];
-  const [quickWeight, setQuickWeight] = useState<number>(
-    latestBio?.scaleWeightKg ?? 70
-  );
+  const [quickWeight, setQuickWeight] = useState<number>(latestBio?.scaleWeightKg ?? 70);
 
   useEffect(() => {
     if (latestBio?.scaleWeightKg) {
@@ -80,7 +78,7 @@ export const QuickActionCommand: React.FC<QuickActionCommandProps> = ({
 
   const dayLogs = useMemo(
     () => timelineLogs.filter((l) => l.date === selectedDate),
-    [timelineLogs, selectedDate]
+    [timelineLogs, selectedDate],
   );
 
   const consumedMacros = useMemo(
@@ -88,20 +86,14 @@ export const QuickActionCommand: React.FC<QuickActionCommandProps> = ({
       dayLogs.reduce(
         (acc, item) => ({
           kcal: acc.kcal + item.calculatedMacros.kcal,
-          proteinG: Number(
-            (acc.proteinG + item.calculatedMacros.proteinG).toFixed(1)
-          ),
-          carbsG: Number(
-            (acc.carbsG + item.calculatedMacros.carbsG).toFixed(1)
-          ),
+          proteinG: Number((acc.proteinG + item.calculatedMacros.proteinG).toFixed(1)),
+          carbsG: Number((acc.carbsG + item.calculatedMacros.carbsG).toFixed(1)),
           fatG: Number((acc.fatG + item.calculatedMacros.fatG).toFixed(1)),
-          fiberG: Number(
-            (acc.fiberG + item.calculatedMacros.fiberG).toFixed(1)
-          ),
+          fiberG: Number((acc.fiberG + item.calculatedMacros.fiberG).toFixed(1)),
         }),
-        { kcal: 0, proteinG: 0, carbsG: 0, fatG: 0, fiberG: 0 }
+        { kcal: 0, proteinG: 0, carbsG: 0, fatG: 0, fiberG: 0 },
       ),
-    [dayLogs]
+    [dayLogs],
   );
 
   const targetMacros = useMemo(
@@ -112,17 +104,17 @@ export const QuickActionCommand: React.FC<QuickActionCommandProps> = ({
       fatG: userProfile?.targetFatG ?? 65,
       fiberG: userProfile?.targetFiberG ?? 34,
     }),
-    [userProfile]
+    [userProfile],
   );
 
   const remainingVector = useMemo(
     () => calculateRemainingMacros(targetMacros, consumedMacros),
-    [targetMacros, consumedMacros]
+    [targetMacros, consumedMacros],
   );
 
   const topBridgeSuggestion = useMemo(
     () => suggestBridgeFoods(remainingVector, foods)[0] ?? null,
-    [remainingVector, foods]
+    [remainingVector, foods],
   );
 
   const matchingFoods = useMemo(() => {
@@ -130,9 +122,7 @@ export const QuickActionCommand: React.FC<QuickActionCommandProps> = ({
     if (!q) return foods.filter((f) => f.isFavorite).slice(0, 4);
     return foods
       .filter(
-        (f) =>
-          f.name.toLowerCase().includes(q) ||
-          (f.brand && f.brand.toLowerCase().includes(q))
+        (f) => f.name.toLowerCase().includes(q) || (f.brand && f.brand.toLowerCase().includes(q)),
       )
       .slice(0, 5);
   }, [foods, query]);
@@ -146,7 +136,7 @@ export const QuickActionCommand: React.FC<QuickActionCommandProps> = ({
           ex.nameEs.toLowerCase().includes(q) ||
           ex.nameEn.toLowerCase().includes(q) ||
           ex.primaryMuscle.toLowerCase().includes(q) ||
-          ex.aliases.some((a) => a.toLowerCase().includes(q))
+          ex.aliases.some((a) => a.toLowerCase().includes(q)),
       )
       .slice(0, 5);
   }, [exerciseCatalog, query]);
@@ -155,11 +145,7 @@ export const QuickActionCommand: React.FC<QuickActionCommandProps> = ({
     const q = query.trim().toLowerCase();
     if (!q) return recipes.slice(0, 2);
     return recipes
-      .filter(
-        (r) =>
-          r.name.toLowerCase().includes(q) ||
-          r.description.toLowerCase().includes(q)
-      )
+      .filter((r) => r.name.toLowerCase().includes(q) || r.description.toLowerCase().includes(q))
       .slice(0, 3);
   }, [recipes, query]);
 
@@ -168,6 +154,7 @@ export const QuickActionCommand: React.FC<QuickActionCommandProps> = ({
     setTimeout(() => setQuickToast(null), 2400);
   };
 
+  const dialogRef = useDialogFocus(isOpen, onClose);
   if (!isOpen) return null;
 
   const primaryRoutine = workoutRoutines[0];
@@ -182,6 +169,10 @@ export const QuickActionCommand: React.FC<QuickActionCommandProps> = ({
         onClick={onClose}
       >
         <motion.div
+          ref={dialogRef}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Añadir rápido"
           initial={{ scale: 0.97, opacity: 0, y: -8 }}
           animate={{ scale: 1, opacity: 1, y: 0 }}
           exit={{ scale: 0.97, opacity: 0, y: -8 }}
@@ -193,8 +184,8 @@ export const QuickActionCommand: React.FC<QuickActionCommandProps> = ({
             <div className="relative flex-1">
               <Search className="pointer-events-none absolute top-3 left-3.5 h-5 w-5 text-emerald-600" />
               <input
+                aria-label="Buscar alimentos o ejercicios"
                 type="text"
-                autoFocus
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Escribe una comida o ejercicio (ej. pollo, avena, press banca)..."
@@ -225,9 +216,7 @@ export const QuickActionCommand: React.FC<QuickActionCommandProps> = ({
                   <Scale className="h-4 w-4" />
                 </div>
                 <div>
-                  <div className="text-sm font-bold text-slate-900">
-                    Tu peso hoy
-                  </div>
+                  <div className="text-sm font-bold text-slate-900">Tu peso hoy</div>
                   <div className="text-xs text-slate-500">Guardar en 1 clic</div>
                 </div>
               </div>
@@ -259,9 +248,7 @@ export const QuickActionCommand: React.FC<QuickActionCommandProps> = ({
                 </div>
                 <div className="min-w-0">
                   <div className="truncate text-sm font-bold text-slate-900">
-                    {topBridgeSuggestion
-                      ? topBridgeSuggestion.title
-                      : 'Meta del día lista'}
+                    {topBridgeSuggestion ? topBridgeSuggestion.title : 'Meta del día lista'}
                   </div>
                   <div className="text-xs text-slate-500">
                     {remainingVector.kcal > 0
@@ -321,22 +308,17 @@ export const QuickActionCommand: React.FC<QuickActionCommandProps> = ({
 
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               {matchingFoods.map((food) => {
-                const macros = calculateFoodItemMacros(
-                  food,
-                  food.defaultServingGrams
-                );
+                const macros = calculateFoodItemMacros(food, food.defaultServingGrams);
                 return (
                   <div
                     key={food.id}
                     className="flex items-center justify-between gap-2 rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm shadow-2xs"
                   >
                     <div className="min-w-0">
-                      <div className="truncate font-bold text-slate-900">
-                        {food.name}
-                      </div>
+                      <div className="truncate font-bold text-slate-900">{food.name}</div>
                       <div className="text-xs text-slate-500">
-                        {food.defaultServingGrams}g · {macros.kcal} kcal ·{' '}
-                        {macros.proteinG}g proteína
+                        {food.defaultServingGrams}g · {macros.kcal} kcal · {macros.proteinG}g
+                        proteína
                       </div>
                     </div>
                     <button
@@ -371,8 +353,7 @@ export const QuickActionCommand: React.FC<QuickActionCommandProps> = ({
                       <span className="truncate">{recipe.name}</span>
                     </div>
                     <div className="text-xs text-slate-500">
-                      {recipe.totalMacros.kcal} kcal ·{' '}
-                      {recipe.totalMacros.proteinG}g proteína
+                      {recipe.totalMacros.kcal} kcal · {recipe.totalMacros.proteinG}g proteína
                     </div>
                   </div>
                   <button
@@ -429,12 +410,8 @@ export const QuickActionCommand: React.FC<QuickActionCommandProps> = ({
                       className="h-10 w-10 shrink-0 rounded-xl border border-slate-100 bg-slate-50 object-cover"
                     />
                     <div className="min-w-0">
-                      <div className="truncate font-bold text-slate-900">
-                        {ex.nameEs}
-                      </div>
-                      <div className="text-xs text-slate-500">
-                        {ex.primaryMuscle}
-                      </div>
+                      <div className="truncate font-bold text-slate-900">{ex.nameEs}</div>
+                      <div className="text-xs text-slate-500">{ex.primaryMuscle}</div>
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-1.5">
@@ -446,7 +423,7 @@ export const QuickActionCommand: React.FC<QuickActionCommandProps> = ({
                           showFeedback(`"${ex.nameEs}" añadido a tu rutina.`);
                         } else {
                           saveWorkoutRoutine({
-                            id: `routine-${Date.now()}`,
+                            id: `routine-${generateUuid()}`,
                             name: 'Mi Rutina 1',
                             assignedDays: [new Date().getDay()],
                             exercises: [
@@ -461,9 +438,7 @@ export const QuickActionCommand: React.FC<QuickActionCommandProps> = ({
                               },
                             ],
                           });
-                          showFeedback(
-                            `Rutina "Mi Rutina 1" creada con "${ex.nameEs}".`
-                          );
+                          showFeedback(`Rutina "Mi Rutina 1" creada con "${ex.nameEs}".`);
                         }
                       }}
                       className="rounded-xl bg-indigo-50 px-2.5 py-1.5 text-xs font-bold text-indigo-700 ring-1 ring-indigo-200 hover:bg-indigo-100"

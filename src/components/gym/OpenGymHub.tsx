@@ -1,6 +1,4 @@
-import { generateUuid } from '../../lib/ids';
-import React, { useEffect, useMemo, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import {
   Award,
   BarChart3,
@@ -14,13 +12,12 @@ import {
   Play,
   Plus,
   Search,
-  SkipForward,
   Sparkles,
   Trash2,
   Trophy,
-  X,
   Zap,
 } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   CartesianGrid,
   ComposedChart,
@@ -31,15 +28,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import type {
-  EquipmentEs,
-  ExerciseCatalogItem,
-  MuscleGroupEs,
-  WorkoutRoutine,
-  WorkoutRoutineExercise,
-  WorkoutSetLog,
-  WorkoutSetType,
-} from '../../types/nutrition';
+import { generateUuid } from '../../lib/ids';
 import {
   calculateEstimated1RM,
   calculateSessionTonnageKg,
@@ -49,6 +38,17 @@ import {
   getHistoricalExerciseBest,
 } from '../../lib/strengthAnalytics';
 import { useNutritionStore } from '../../store/useNutritionStore';
+import type {
+  EquipmentEs,
+  ExerciseCatalogItem,
+  MuscleGroupEs,
+  WorkoutRoutine,
+  WorkoutRoutineExercise,
+  WorkoutSetLog,
+  WorkoutSetType,
+} from '../../types/nutrition';
+import { ExerciseDetailDialog } from './ExerciseDetailDialog';
+import { RestTimer, startRestTimer } from './RestTimer';
 
 const QUICK_MUSCLE_CHIPS: Array<{ label: string; value: MuscleGroupEs | 'ALL' }> = [
   { label: 'Todos', value: 'ALL' },
@@ -81,7 +81,7 @@ const SET_TYPE_Order: WorkoutSetType[] = ['working', 'warmup'];
 
 function createEmptyRoutineDraft(): WorkoutRoutine {
   return {
-    id: `routine-custom-${Date.now()}`,
+    id: `routine-custom-${generateUuid()}`,
     name: '',
     assignedDays: [],
     exercises: [],
@@ -91,32 +91,6 @@ function createEmptyRoutineDraft(): WorkoutRoutine {
 /**
  * Emite un sonido suave al terminar el descanso.
  */
-function playRestTimerBeep() {
-  try {
-    const AudioCtx =
-      window.AudioContext ||
-      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    if (!AudioCtx) return;
-    const ctx = new AudioCtx();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(880, ctx.currentTime);
-    osc.frequency.setValueAtTime(1174.66, ctx.currentTime + 0.14);
-    gain.gain.setValueAtTime(0.18, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.45);
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start();
-    osc.stop(ctx.currentTime + 0.45);
-    if (typeof navigator !== 'undefined' && navigator.vibrate) {
-      navigator.vibrate([180, 80, 180]);
-    }
-  } catch {
-    // Ignorar si el navegador bloquea audio sin interacción previa
-  }
-}
-
 export const OpenGymHub: React.FC = () => {
   const userProfile = useNutritionStore((s) => s.userProfile);
   const biometricLogs = useNutritionStore((s) => s.biometricLogs);
@@ -126,78 +100,73 @@ export const OpenGymHub: React.FC = () => {
   const selectedDate = useNutritionStore((s) => s.selectedDate);
   const activeWorkoutDraft = useNutritionStore((s) => s.activeWorkoutDraft);
   const routineEditorDraft = useNutritionStore((s) => s.routineEditorDraft);
-  const setActiveWorkoutDraft = useNutritionStore(
-    (s) => s.setActiveWorkoutDraft
-  );
-  const setRoutineEditorDraft = useNutritionStore(
-    (s) => s.setRoutineEditorDraft
-  );
+  const setActiveWorkoutDraft = useNutritionStore((s) => s.setActiveWorkoutDraft);
+  const setRoutineEditorDraft = useNutritionStore((s) => s.setRoutineEditorDraft);
   const saveWorkoutRoutine = useNutritionStore((s) => s.saveWorkoutRoutine);
   const addExerciseToRoutine = useNutritionStore((s) => s.addExerciseToRoutine);
   const deleteWorkoutRoutine = useNutritionStore((s) => s.deleteWorkoutRoutine);
   const logWorkoutSession = useNutritionStore((s) => s.logWorkoutSession);
   const deleteWorkoutSession = useNutritionStore((s) => s.deleteWorkoutSession);
 
-  const [subTab, setSubTab] = useState<
-    'active_workout' | 'catalog' | 'routines' | 'analytics'
-  >('active_workout');
+  const [subTab, setSubTab] = useState<'active_workout' | 'catalog' | 'routines' | 'analytics'>(
+    'active_workout',
+  );
 
   const catalogMap = useMemo(
     () => new Map(exerciseCatalog.map((e) => [e.id, e])),
-    [exerciseCatalog]
+    [exerciseCatalog],
   );
 
   // ==========================================================================
   // ESTADO 1: ENTRENAR HOY (100% PERSISTENTE ENTRE PESTAÑAS Y RECARGAS)
   // ==========================================================================
-  const selectedRoutineId =
-    activeWorkoutDraft?.routineId || workoutRoutines[0]?.id || '';
+  const selectedRoutineId = activeWorkoutDraft?.routineId || workoutRoutines[0]?.id || '';
 
-  const setSelectedRoutineId = (nextRoutineId: string) => {
-    setActiveWorkoutDraft((prev) => ({
-      routineId: nextRoutineId,
-      startedAtIso: prev?.startedAtIso ?? new Date().toISOString(),
-      setsByExercise:
-        prev?.routineId === nextRoutineId ? prev.setsByExercise : {},
-      restTimerEndsAtMs: prev?.restTimerEndsAtMs ?? null,
-      restTimerTotalSeconds: prev?.restTimerTotalSeconds ?? 120,
-      restTimerExerciseName: prev?.restTimerExerciseName ?? '',
-      updatedAt: new Date().toISOString(),
-    }));
-  };
+  const setSelectedRoutineId = useCallback(
+    (nextRoutineId: string) => {
+      setActiveWorkoutDraft((prev) => ({
+        routineId: nextRoutineId,
+        startedAtIso: prev?.startedAtIso ?? new Date().toISOString(),
+        setsByExercise: prev?.routineId === nextRoutineId ? prev.setsByExercise : {},
+        restTimerEndsAtMs: prev?.restTimerEndsAtMs ?? null,
+        restTimerTotalSeconds: prev?.restTimerTotalSeconds ?? 120,
+        restTimerExerciseName: prev?.restTimerExerciseName ?? '',
+        updatedAt: new Date().toISOString(),
+      }));
+    },
+    [setActiveWorkoutDraft],
+  );
 
   useEffect(() => {
-    if (
-      workoutRoutines.length > 0 &&
-      !workoutRoutines.some((r) => r.id === selectedRoutineId)
-    ) {
+    if (workoutRoutines.length > 0 && !workoutRoutines.some((r) => r.id === selectedRoutineId)) {
       setSelectedRoutineId(workoutRoutines[0].id);
     } else if (workoutRoutines.length === 0 && activeWorkoutDraft !== null) {
       setActiveWorkoutDraft(null);
     }
-  }, [workoutRoutines, selectedRoutineId, activeWorkoutDraft]);
+  }, [
+    workoutRoutines,
+    selectedRoutineId,
+    activeWorkoutDraft,
+    setActiveWorkoutDraft,
+    setSelectedRoutineId,
+  ]);
 
   const activeRoutine = useMemo(
-    () =>
-      workoutRoutines.find((r) => r.id === selectedRoutineId) ??
-      workoutRoutines[0],
-    [workoutRoutines, selectedRoutineId]
+    () => workoutRoutines.find((r) => r.id === selectedRoutineId) ?? workoutRoutines[0],
+    [workoutRoutines, selectedRoutineId],
   );
 
   const activeSetsByExercise = useMemo(
     () => activeWorkoutDraft?.setsByExercise ?? {},
-    [activeWorkoutDraft?.setsByExercise]
+    [activeWorkoutDraft?.setsByExercise],
   );
 
   const updateActiveSets = (
-    updater: (
-      prev: Record<string, WorkoutSetLog[]>
-    ) => Record<string, WorkoutSetLog[]>
+    updater: (prev: Record<string, WorkoutSetLog[]>) => Record<string, WorkoutSetLog[]>,
   ) => {
     if (!activeRoutine) return;
     setActiveWorkoutDraft((prev) => {
-      const currentSets =
-        prev?.routineId === activeRoutine.id ? prev.setsByExercise : {};
+      const currentSets = prev?.routineId === activeRoutine.id ? prev.setsByExercise : {};
       const nextSets = updater(currentSets);
       return {
         routineId: activeRoutine.id,
@@ -211,20 +180,16 @@ export const OpenGymHub: React.FC = () => {
     });
   };
 
-  const [sessionSavedBanner, setSessionSavedBanner] = useState<string | null>(
-    null
-  );
+  const [sessionSavedBanner, setSessionSavedBanner] = useState<string | null>(null);
   const [quickAddExerciseId, setQuickAddExerciseId] = useState<string>(
-    exerciseCatalog[0]?.id ?? 'og-0025'
+    exerciseCatalog[0]?.id ?? 'og-0025',
   );
 
   useEffect(() => {
     if (!activeRoutine) return;
 
     const currentSets =
-      activeWorkoutDraft?.routineId === activeRoutine.id
-        ? activeWorkoutDraft.setsByExercise
-        : {};
+      activeWorkoutDraft?.routineId === activeRoutine.id ? activeWorkoutDraft.setsByExercise : {};
 
     let needsUpdate = activeWorkoutDraft?.routineId !== activeRoutine.id;
     const nextMap: Record<string, WorkoutSetLog[]> = {};
@@ -254,18 +219,11 @@ export const OpenGymHub: React.FC = () => {
         isCompleted: false,
         isPrWeight: false,
         isPr1RM: false,
-        estimated1RM: calculateEstimated1RM(
-          sug.suggestedWeightKg,
-          sug.suggestedReps,
-          'working'
-        ),
+        estimated1RM: calculateEstimated1RM(sug.suggestedWeightKg, sug.suggestedReps, 'working'),
       }));
     }
 
-    if (
-      Object.keys(currentSets).length !== Object.keys(nextMap).length ||
-      needsUpdate
-    ) {
+    if (Object.keys(currentSets).length !== Object.keys(nextMap).length || needsUpdate) {
       setActiveWorkoutDraft((prev) => ({
         routineId: activeRoutine.id,
         startedAtIso: prev?.startedAtIso ?? new Date().toISOString(),
@@ -276,90 +234,7 @@ export const OpenGymHub: React.FC = () => {
         updatedAt: new Date().toISOString(),
       }));
     }
-  }, [
-    activeRoutine?.id,
-    activeRoutine?.exercises,
-    catalogMap,
-    workoutSessions,
-  ]);
-
-  // Temporizador de descanso basado en timestamp real (no se pierde al cambiar de pestaña ni al bloquear el celular)
-  const restTimerEndsAtMs = activeWorkoutDraft?.restTimerEndsAtMs ?? null;
-  const restTimerTotal = activeWorkoutDraft?.restTimerTotalSeconds ?? 120;
-  const restTimerExerciseName =
-    activeWorkoutDraft?.restTimerExerciseName ?? '';
-
-  const [restTimerRemaining, setRestTimerRemaining] = useState<number>(() => {
-    if (!restTimerEndsAtMs) return 0;
-    return Math.max(0, Math.ceil((restTimerEndsAtMs - Date.now()) / 1000));
-  });
-
-  useEffect(() => {
-    if (!restTimerEndsAtMs) {
-      setRestTimerRemaining(0);
-      return;
-    }
-
-    const updateRemaining = () => {
-      const diffSec = Math.max(
-        0,
-        Math.ceil((restTimerEndsAtMs - Date.now()) / 1000)
-      );
-      setRestTimerRemaining(diffSec);
-      if (diffSec <= 0) {
-        playRestTimerBeep();
-        setActiveWorkoutDraft((prev) =>
-          prev ? { ...prev, restTimerEndsAtMs: null } : null
-        );
-      }
-    };
-
-    updateRemaining();
-    const timer = window.setInterval(updateRemaining, 500);
-    return () => window.clearInterval(timer);
-  }, [restTimerEndsAtMs]);
-
-  const startRestTimer = (seconds: number, exName: string) => {
-    const endsAt = Date.now() + seconds * 1000;
-    setRestTimerRemaining(seconds);
-    setActiveWorkoutDraft((prev) =>
-      prev
-        ? {
-            ...prev,
-            restTimerEndsAtMs: endsAt,
-            restTimerTotalSeconds: seconds,
-            restTimerExerciseName: exName,
-            updatedAt: new Date().toISOString(),
-          }
-        : null
-    );
-  };
-
-  const adjustRestTimer = (deltaSeconds: number) => {
-    setActiveWorkoutDraft((prev) => {
-      if (!prev || !prev.restTimerEndsAtMs) return prev;
-      const nextEndsAt = prev.restTimerEndsAtMs + deltaSeconds * 1000;
-      if (nextEndsAt <= Date.now()) {
-        return { ...prev, restTimerEndsAtMs: null };
-      }
-      return {
-        ...prev,
-        restTimerEndsAtMs: nextEndsAt,
-        updatedAt: new Date().toISOString(),
-      };
-    });
-  };
-
-  const stopRestTimer = () => {
-    setRestTimerRemaining(0);
-    setActiveWorkoutDraft((prev) =>
-      prev ? { ...prev, restTimerEndsAtMs: null } : null
-    );
-  };
-
-  const isRestTimerActive = Boolean(
-    restTimerEndsAtMs && restTimerRemaining > 0
-  );
+  }, [activeRoutine, activeWorkoutDraft, setActiveWorkoutDraft, catalogMap, workoutSessions]);
 
   const handleCycleSetType = (exerciseId: string, setId: string) => {
     updateActiveSets((prev) => {
@@ -368,8 +243,7 @@ export const OpenGymHub: React.FC = () => {
         ...prev,
         [exerciseId]: list.map((s) => {
           if (s.id !== setId) return s;
-          const nextIdx =
-            (SET_TYPE_Order.indexOf(s.setType) + 1) % SET_TYPE_Order.length;
+          const nextIdx = (SET_TYPE_Order.indexOf(s.setType) + 1) % SET_TYPE_Order.length;
           const nextType = SET_TYPE_Order[nextIdx];
           const next1RM = calculateEstimated1RM(s.weightKg, s.reps, nextType);
           return {
@@ -388,7 +262,7 @@ export const OpenGymHub: React.FC = () => {
     exerciseId: string,
     setId: string,
     field: 'weightKg' | 'reps',
-    value: number
+    value: number,
   ) => {
     updateActiveSets((prev) => {
       const list = prev[exerciseId] ?? [];
@@ -396,28 +270,23 @@ export const OpenGymHub: React.FC = () => {
         ...prev,
         [exerciseId]: list.map((s) => {
           if (s.id !== setId) return s;
-          const updated = { ...s, [field]: Math.max(0, value) };
+          if (!Number.isFinite(value)) return s;
+          const updated = {
+            ...s,
+            [field]: Math.max(0, field === 'reps' ? Math.trunc(value) : value),
+          };
           updated.estimated1RM = calculateEstimated1RM(
             updated.weightKg,
             updated.reps,
-            updated.setType
+            updated.setType,
           );
-          const bestHist = getHistoricalExerciseBest(
-            exerciseId,
-            workoutSessions
-          );
+          const bestHist = getHistoricalExerciseBest(exerciseId, workoutSessions);
           const isEffective =
-            updated.isCompleted &&
-            updated.setType !== 'warmup' &&
-            updated.weightKg > 0;
+            updated.isCompleted && updated.setType !== 'warmup' && updated.weightKg > 0;
           updated.isPrWeight =
-            isEffective &&
-            bestHist.maxWeightKg > 0 &&
-            updated.weightKg > bestHist.maxWeightKg;
+            isEffective && bestHist.maxWeightKg > 0 && updated.weightKg > bestHist.maxWeightKg;
           updated.isPr1RM =
-            isEffective &&
-            bestHist.max1RMKg > 0 &&
-            updated.estimated1RM > bestHist.max1RMKg;
+            isEffective && bestHist.max1RMKg > 0 && updated.estimated1RM > bestHist.max1RMKg;
           return updated;
         }),
       };
@@ -428,7 +297,7 @@ export const OpenGymHub: React.FC = () => {
     exerciseId: string,
     setId: string,
     restSeconds: number,
-    exNameEs: string
+    exNameEs: string,
   ) => {
     let shouldStartRest = false;
     updateActiveSets((prev) => {
@@ -439,20 +308,11 @@ export const OpenGymHub: React.FC = () => {
           if (s.id !== setId) return s;
           const nextCompleted = !s.isCompleted;
           const est1RM = calculateEstimated1RM(s.weightKg, s.reps, s.setType);
-          const bestHist = getHistoricalExerciseBest(
-            exerciseId,
-            workoutSessions
-          );
-          const isEffective =
-            nextCompleted && s.setType !== 'warmup' && s.weightKg > 0;
+          const bestHist = getHistoricalExerciseBest(exerciseId, workoutSessions);
+          const isEffective = nextCompleted && s.setType !== 'warmup' && s.weightKg > 0;
           const isPrWeight =
-            isEffective &&
-            bestHist.maxWeightKg > 0 &&
-            s.weightKg > bestHist.maxWeightKg;
-          const isPr1RM =
-            isEffective &&
-            bestHist.max1RMKg > 0 &&
-            est1RM > bestHist.max1RMKg;
+            isEffective && bestHist.maxWeightKg > 0 && s.weightKg > bestHist.maxWeightKg;
+          const isPr1RM = isEffective && bestHist.max1RMKg > 0 && est1RM > bestHist.max1RMKg;
 
           if (nextCompleted) {
             shouldStartRest = true;
@@ -503,17 +363,17 @@ export const OpenGymHub: React.FC = () => {
 
   const allCurrentSessionSets = useMemo(
     () => Object.values(activeSetsByExercise).flat(),
-    [activeSetsByExercise]
+    [activeSetsByExercise],
   );
 
   const liveSessionTonnageKg = useMemo(
     () => calculateSessionTonnageKg(allCurrentSessionSets),
-    [allCurrentSessionSets]
+    [allCurrentSessionSets],
   );
 
   const completedSetsCount = useMemo(
     () => allCurrentSessionSets.filter((s) => s.isCompleted).length,
-    [allCurrentSessionSets]
+    [allCurrentSessionSets],
   );
 
   const handleFinishAndSaveWorkout = () => {
@@ -525,13 +385,11 @@ export const OpenGymHub: React.FC = () => {
       ? new Date(activeWorkoutDraft.startedAtIso)
       : now;
     const pad = (n: number) => String(n).padStart(2, '0');
-    const startTimeStr = `${pad(startedDate.getHours())}:${pad(
-      startedDate.getMinutes()
-    )}`;
+    const startTimeStr = `${pad(startedDate.getHours())}:${pad(startedDate.getMinutes())}`;
     const endTimeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
     const elapsedMin = Math.max(
       15,
-      Math.round((now.getTime() - startedDate.getTime()) / 60000) || 45
+      Math.round((now.getTime() - startedDate.getTime()) / 60000) || 45,
     );
 
     const saved = logWorkoutSession({
@@ -545,7 +403,7 @@ export const OpenGymHub: React.FC = () => {
     });
 
     setSessionSavedBanner(
-      `¡Entrenamiento guardado! Completaste ${completed.length} series hoy (${saved.totalVolumeKg.toLocaleString()} kg movidos en total).`
+      `¡Entrenamiento guardado! Completaste ${completed.length} series hoy (${saved.totalVolumeKg.toLocaleString()} kg movidos en total).`,
     );
   };
 
@@ -553,20 +411,13 @@ export const OpenGymHub: React.FC = () => {
   // ESTADO 2: CATÁLOGO DE EJERCICIOS
   // ==========================================================================
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedMuscleFilter, setSelectedMuscleFilter] = useState<
-    MuscleGroupEs | 'ALL'
-  >('ALL');
-  const [selectedEquipmentFilter, setSelectedEquipmentFilter] = useState<
-    EquipmentEs | 'ALL'
-  >('ALL');
-  const [detailModalExercise, setDetailModalExercise] =
-    useState<ExerciseCatalogItem | null>(null);
-  const [detailModalTab, setDetailModalTab] = useState<'demo' | 'history'>(
-    'demo'
+  const [selectedMuscleFilter, setSelectedMuscleFilter] = useState<MuscleGroupEs | 'ALL'>('ALL');
+  const [selectedEquipmentFilter, setSelectedEquipmentFilter] = useState<EquipmentEs | 'ALL'>(
+    'ALL',
   );
-  const [animatedPreviewIds, setAnimatedPreviewIds] = useState<
-    Record<string, boolean>
-  >({});
+  const [detailModalExercise, setDetailModalExercise] = useState<ExerciseCatalogItem | null>(null);
+  const [detailModalTab, setDetailModalTab] = useState<'demo' | 'history'>('demo');
+  const [animatedPreviewIds, setAnimatedPreviewIds] = useState<Record<string, boolean>>({});
 
   const filteredCatalog = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -578,10 +429,7 @@ export const OpenGymHub: React.FC = () => {
       ) {
         return false;
       }
-      if (
-        selectedEquipmentFilter !== 'ALL' &&
-        ex.equipment !== selectedEquipmentFilter
-      ) {
+      if (selectedEquipmentFilter !== 'ALL' && ex.equipment !== selectedEquipmentFilter) {
         return false;
       }
       if (!q) return true;
@@ -591,29 +439,20 @@ export const OpenGymHub: React.FC = () => {
       const inMuscle = ex.primaryMuscle.toLowerCase().includes(q);
       return inEs || inEn || inAliases || inMuscle;
     });
-  }, [
-    exerciseCatalog,
-    searchQuery,
-    selectedMuscleFilter,
-    selectedEquipmentFilter,
-  ]);
+  }, [exerciseCatalog, searchQuery, selectedMuscleFilter, selectedEquipmentFilter]);
 
   // ==========================================================================
   // ESTADO 3: MIS RUTINAS (BORRADOR Y CAMBIOS PERSISTENTES)
   // ==========================================================================
   const editingRoutine = useMemo(
-    () =>
-      routineEditorDraft ?? workoutRoutines[0] ?? createEmptyRoutineDraft(),
-    [routineEditorDraft, workoutRoutines]
+    () => routineEditorDraft ?? workoutRoutines[0] ?? createEmptyRoutineDraft(),
+    [routineEditorDraft, workoutRoutines],
   );
 
   const setEditingRoutine = (nextRoutine: WorkoutRoutine) => {
     setRoutineEditorDraft(nextRoutine);
     // Si la rutina ya existe en workoutRoutines y tiene nombre válido, auto-guardar cambios
-    if (
-      nextRoutine.name.trim() &&
-      workoutRoutines.some((r) => r.id === nextRoutine.id)
-    ) {
+    if (nextRoutine.name.trim() && workoutRoutines.some((r) => r.id === nextRoutine.id)) {
       saveWorkoutRoutine({
         ...nextRoutine,
         name: nextRoutine.name.trim(),
@@ -622,14 +461,10 @@ export const OpenGymHub: React.FC = () => {
   };
   const [routineExerciseFilter, setRoutineExerciseFilter] = useState('');
   const [exerciseToAddId, setExerciseToAddId] = useState<string>(
-    exerciseCatalog[0]?.id ?? 'og-0025'
+    exerciseCatalog[0]?.id ?? 'og-0025',
   );
-  const [routineSavedToast, setRoutineSavedToast] = useState<string | null>(
-    null
-  );
-  const [routineErrorToast, setRoutineErrorToast] = useState<string | null>(
-    null
-  );
+  const [routineSavedToast, setRoutineSavedToast] = useState<string | null>(null);
+  const [routineErrorToast, setRoutineErrorToast] = useState<string | null>(null);
 
   const filteredExercisesForRoutinePicker = useMemo(() => {
     const q = routineExerciseFilter.trim().toLowerCase();
@@ -638,7 +473,7 @@ export const OpenGymHub: React.FC = () => {
       (ex) =>
         ex.nameEs.toLowerCase().includes(q) ||
         ex.primaryMuscle.toLowerCase().includes(q) ||
-        ex.equipment.toLowerCase().includes(q)
+        ex.equipment.toLowerCase().includes(q),
     );
   }, [exerciseCatalog, routineExerciseFilter]);
 
@@ -663,14 +498,12 @@ export const OpenGymHub: React.FC = () => {
   const handleUseExerciseFromCatalog = (ex: ExerciseCatalogItem) => {
     if (activeRoutine) {
       addExerciseToRoutine(activeRoutine.id, ex.id);
-      setSessionSavedBanner(
-        `"${ex.nameEs}" se agregó a tu rutina "${activeRoutine.name}".`
-      );
+      setSessionSavedBanner(`"${ex.nameEs}" se agregó a tu rutina "${activeRoutine.name}".`);
       return;
     }
 
     const firstRoutine: WorkoutRoutine = {
-      id: `routine-custom-${Date.now()}`,
+      id: `routine-custom-${generateUuid()}`,
       name: 'Mi Rutina 1',
       assignedDays: [1, 3, 5],
       exercises: [
@@ -689,7 +522,7 @@ export const OpenGymHub: React.FC = () => {
     setSelectedRoutineId(firstRoutine.id);
     setEditingRoutine(firstRoutine);
     setSessionSavedBanner(
-      `Se creó tu rutina "${firstRoutine.name}" con el ejercicio "${ex.nameEs}".`
+      `Se creó tu rutina "${firstRoutine.name}" con el ejercicio "${ex.nameEs}".`,
     );
   };
 
@@ -702,7 +535,7 @@ export const OpenGymHub: React.FC = () => {
         sessions: workoutSessions,
         catalog: exerciseCatalog,
       }),
-    [workoutSessions, exerciseCatalog]
+    [workoutSessions, exerciseCatalog],
   );
 
   // Priorizar en el selector de fuerza los ejercicios que el usuario realmente entrena
@@ -724,14 +557,11 @@ export const OpenGymHub: React.FC = () => {
   }, [workoutSessions, workoutRoutines]);
 
   const [synergyExerciseId, setSynergyExerciseId] = useState<string>(
-    () => userTrackedExerciseIds[0] ?? exerciseCatalog[0]?.id ?? 'og-0025'
+    () => userTrackedExerciseIds[0] ?? exerciseCatalog[0]?.id ?? 'og-0025',
   );
 
   useEffect(() => {
-    if (
-      userTrackedExerciseIds.length > 0 &&
-      !userTrackedExerciseIds.includes(synergyExerciseId)
-    ) {
+    if (userTrackedExerciseIds.length > 0 && !userTrackedExerciseIds.includes(synergyExerciseId)) {
       setSynergyExerciseId(userTrackedExerciseIds[0]);
     }
   }, [userTrackedExerciseIds, synergyExerciseId]);
@@ -744,17 +574,12 @@ export const OpenGymHub: React.FC = () => {
         workoutSessions,
         currentPhase: userProfile?.currentPhase ?? 'recomp',
       }),
-    [
-      synergyExerciseId,
-      biometricLogs,
-      workoutSessions,
-      userProfile?.currentPhase,
-    ]
+    [synergyExerciseId, biometricLogs, workoutSessions, userProfile?.currentPhase],
   );
 
   const hasStrengthPointsForSelectedExercise = useMemo(
     () => synergyReport.points.some((p) => p.estimated1RM !== null && p.estimated1RM > 0),
-    [synergyReport.points]
+    [synergyReport.points],
   );
 
   return (
@@ -771,8 +596,8 @@ export const OpenGymHub: React.FC = () => {
           </h1>
           <p className="mt-1 text-sm text-slate-600">
             Arma tus propias rutinas, anota tus pesos reales y marca{' '}
-            <strong className="font-bold text-emerald-700">Listo [✓]</strong> al
-            terminar cada serie.
+            <strong className="font-bold text-emerald-700">Listo [✓]</strong> al terminar cada
+            serie.
           </p>
         </div>
 
@@ -858,7 +683,9 @@ export const OpenGymHub: React.FC = () => {
                 Aún no tienes ninguna rutina creada
               </h2>
               <p className="mx-auto mt-2 max-w-lg text-sm text-slate-600">
-                Tu cuenta está completamente limpia y lista para tus propios datos. Crea tu primera rutina personalizada o elige ejercicios del catálogo para empezar a registrar tus entrenamientos.
+                Tu cuenta está completamente limpia y lista para tus propios datos. Crea tu primera
+                rutina personalizada o elige ejercicios del catálogo para empezar a registrar tus
+                entrenamientos.
               </p>
               <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
                 <button
@@ -887,10 +714,11 @@ export const OpenGymHub: React.FC = () => {
               {/* Selector de rutina y botón de guardar */}
               <div className="flex flex-col justify-between gap-4 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center">
                 <div className="flex flex-wrap items-center gap-3">
-                  <label className="text-sm font-bold text-slate-700">
+                  <label htmlFor="opengymhub-field-1" className="text-sm font-bold text-slate-700">
                     Rutina de hoy:
                   </label>
                   <select
+                    id="opengymhub-field-1"
                     value={activeRoutine.id}
                     onChange={(e) => setSelectedRoutineId(e.target.value)}
                     className="rounded-xl border border-slate-300 bg-slate-50 px-4 py-2.5 text-sm font-bold text-slate-900 focus:border-indigo-500 focus:bg-white focus:outline-none"
@@ -919,8 +747,7 @@ export const OpenGymHub: React.FC = () => {
                       Avance de hoy
                     </span>
                     <span className="text-base font-extrabold text-slate-900">
-                      {completedSetsCount} de {allCurrentSessionSets.length}{' '}
-                      series listas
+                      {completedSetsCount} de {allCurrentSessionSets.length} series listas
                     </span>
                     {liveSessionTonnageKg > 0 && (
                       <span className="ml-2 text-xs font-semibold text-emerald-600">
@@ -1001,8 +828,7 @@ export const OpenGymHub: React.FC = () => {
                               <p className="mt-1 text-sm text-slate-600">
                                 {exItem.primaryMuscle} · {exItem.equipment} · Meta:{' '}
                                 <strong className="font-bold text-slate-800">
-                                  {rEx.targetSets} series de{' '}
-                                  {rEx.targetRepRange[0]} a{' '}
+                                  {rEx.targetSets} series de {rEx.targetRepRange[0]} a{' '}
                                   {rEx.targetRepRange[1]} repeticiones
                                 </strong>
                               </p>
@@ -1025,9 +851,7 @@ export const OpenGymHub: React.FC = () => {
                                   : 'Primer registro'}
                               </span>
                             </div>
-                            <p className="mt-0.5 text-slate-700">
-                              {progPlan.summaryBanner}
-                            </p>
+                            <p className="mt-0.5 text-slate-700">{progPlan.summaryBanner}</p>
                           </div>
                         </div>
 
@@ -1037,23 +861,17 @@ export const OpenGymHub: React.FC = () => {
                             <thead>
                               <tr className="border-b border-slate-200 text-xs font-bold uppercase tracking-wider text-slate-500">
                                 <th className="py-2.5 pr-3">Serie</th>
-                                <th className="px-3 py-2.5">
-                                  Vez anterior / Sugerido
-                                </th>
+                                <th className="px-3 py-2.5">Vez anterior / Sugerido</th>
                                 <th className="px-3 py-2.5">Peso (kg)</th>
                                 <th className="px-3 py-2.5">Repeticiones</th>
-                                <th className="py-2.5 pl-3 text-right">
-                                  Estado
-                                </th>
+                                <th className="py-2.5 pl-3 text-right">Estado</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
                               {sets.map((s, idx) => {
                                 const ghost =
                                   progPlan.setSuggestions[idx] ??
-                                  progPlan.setSuggestions[
-                                    progPlan.setSuggestions.length - 1
-                                  ];
+                                  progPlan.setSuggestions[progPlan.setSuggestions.length - 1];
 
                                 const isWarmup = s.setType === 'warmup';
 
@@ -1061,9 +879,7 @@ export const OpenGymHub: React.FC = () => {
                                   <tr
                                     key={s.id}
                                     className={`transition ${
-                                      s.isCompleted
-                                        ? 'bg-emerald-50/70'
-                                        : 'hover:bg-slate-50'
+                                      s.isCompleted ? 'bg-emerald-50/70' : 'hover:bg-slate-50'
                                     }`}
                                   >
                                     {/* Número de serie */}
@@ -1071,41 +887,31 @@ export const OpenGymHub: React.FC = () => {
                                       <button
                                         type="button"
                                         title="Clic para cambiar entre Serie normal y Calentamiento"
-                                        onClick={() =>
-                                          handleCycleSetType(
-                                            rEx.exerciseId,
-                                            s.id
-                                          )
-                                        }
+                                        onClick={() => handleCycleSetType(rEx.exerciseId, s.id)}
                                         className={`inline-flex items-center justify-center rounded-xl border px-3 py-1.5 text-xs font-bold transition ${
                                           isWarmup
                                             ? 'border-amber-300 bg-amber-50 text-amber-800'
                                             : 'border-slate-200 bg-slate-100 text-slate-800 hover:bg-slate-200'
                                         }`}
                                       >
-                                        {isWarmup
-                                          ? 'Calentamiento'
-                                          : `Serie ${s.setNumber}`}
+                                        {isWarmup ? 'Calentamiento' : `Serie ${s.setNumber}`}
                                       </button>
                                     </td>
 
                                     {/* Anterior y sugerido */}
                                     <td className="px-3 py-3 text-xs text-slate-600">
                                       <div className="font-semibold text-slate-800">
-                                        Anterior:{' '}
-                                        {ghost?.previousText ??
-                                          'Sin registro previo'}
+                                        Anterior: {ghost?.previousText ?? 'Sin registro previo'}
                                       </div>
                                       {progPlan.hasHistory && ghost ? (
                                         <div className="mt-0.5 font-medium text-indigo-600">
-                                          Sugerido hoy:{' '}
-                                          {ghost.suggestedWeightKg} kg ×{' '}
+                                          Sugerido hoy: {ghost.suggestedWeightKg} kg ×{' '}
                                           {ghost.suggestedReps} reps
                                         </div>
                                       ) : (
                                         <div className="mt-0.5 text-slate-500">
-                                          Meta: {rEx.targetRepRange[0]} a{' '}
-                                          {rEx.targetRepRange[1]} reps
+                                          Meta: {rEx.targetRepRange[0]} a {rEx.targetRepRange[1]}{' '}
+                                          reps
                                         </div>
                                       )}
                                     </td>
@@ -1113,6 +919,7 @@ export const OpenGymHub: React.FC = () => {
                                     {/* Input Peso */}
                                     <td className="px-3 py-3">
                                       <input
+                                        aria-label={`Peso, serie ${s.setNumber}, ${exItem.nameEs}`}
                                         type="number"
                                         min={0}
                                         step={0.5}
@@ -1123,7 +930,7 @@ export const OpenGymHub: React.FC = () => {
                                             rEx.exerciseId,
                                             s.id,
                                             'weightKg',
-                                            Number(e.target.value)
+                                            Number(e.target.value),
                                           )
                                         }
                                         className="w-24 rounded-xl border border-slate-300 bg-white px-3 py-2 text-base font-bold text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:outline-none"
@@ -1133,6 +940,7 @@ export const OpenGymHub: React.FC = () => {
                                     {/* Input Repeticiones */}
                                     <td className="px-3 py-3">
                                       <input
+                                        aria-label={`Repeticiones, serie ${s.setNumber}, ${exItem.nameEs}`}
                                         type="number"
                                         min={0}
                                         step={1}
@@ -1142,7 +950,7 @@ export const OpenGymHub: React.FC = () => {
                                             rEx.exerciseId,
                                             s.id,
                                             'reps',
-                                            Number(e.target.value)
+                                            Number(e.target.value),
                                           )
                                         }
                                         className="w-20 rounded-xl border border-slate-300 bg-white px-3 py-2 text-base font-bold text-slate-900 focus:border-indigo-500 focus:outline-none"
@@ -1164,7 +972,7 @@ export const OpenGymHub: React.FC = () => {
                                               rEx.exerciseId,
                                               s.id,
                                               rEx.restSeconds,
-                                              exItem.nameEs
+                                              exItem.nameEs,
                                             )
                                           }
                                           className={`inline-flex items-center gap-1.5 rounded-xl border px-4 py-2 text-xs font-bold transition ${
@@ -1174,9 +982,7 @@ export const OpenGymHub: React.FC = () => {
                                           }`}
                                         >
                                           <Check className="h-4 w-4" />
-                                          <span>
-                                            {s.isCompleted ? 'Listo' : 'Marcar'}
-                                          </span>
+                                          <span>{s.isCompleted ? 'Listo' : 'Marcar'}</span>
                                         </button>
                                       </div>
                                     </td>
@@ -1191,9 +997,7 @@ export const OpenGymHub: React.FC = () => {
                         <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-4">
                           <button
                             type="button"
-                            onClick={() =>
-                              handleAddSetToExercise(rEx.exerciseId)
-                            }
+                            onClick={() => handleAddSetToExercise(rEx.exerciseId)}
                             className="inline-flex items-center gap-1.5 rounded-xl bg-slate-100 px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-200"
                           >
                             <Plus className="h-4 w-4" />
@@ -1242,10 +1046,7 @@ export const OpenGymHub: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => {
-                      addExerciseToRoutine(
-                        activeRoutine.id,
-                        quickAddExerciseId
-                      );
+                      addExerciseToRoutine(activeRoutine.id, quickAddExerciseId);
                     }}
                     className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-indigo-500"
                   >
@@ -1270,8 +1071,7 @@ export const OpenGymHub: React.FC = () => {
                   </p>
                 </div>
                 <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-700">
-                  {workoutSessions.length}{' '}
-                  {workoutSessions.length === 1 ? 'sesión' : 'sesiones'}
+                  {workoutSessions.length} {workoutSessions.length === 1 ? 'sesión' : 'sesiones'}
                 </span>
               </div>
 
@@ -1332,9 +1132,7 @@ export const OpenGymHub: React.FC = () => {
                 <select
                   value={selectedEquipmentFilter}
                   onChange={(e) =>
-                    setSelectedEquipmentFilter(
-                      e.target.value as EquipmentEs | 'ALL'
-                    )
+                    setSelectedEquipmentFilter(e.target.value as EquipmentEs | 'ALL')
                   }
                   className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-800 focus:border-indigo-500 focus:bg-white focus:outline-none"
                 >
@@ -1416,9 +1214,7 @@ export const OpenGymHub: React.FC = () => {
                     </div>
 
                     <div className="p-5">
-                      <h3 className="text-base font-extrabold text-slate-900">
-                        {ex.nameEs}
-                      </h3>
+                      <h3 className="text-base font-extrabold text-slate-900">{ex.nameEs}</h3>
                       <p className="mt-1 text-xs font-medium text-slate-500">
                         Equipo: {ex.equipment}
                       </p>
@@ -1460,9 +1256,7 @@ export const OpenGymHub: React.FC = () => {
           <div className="space-y-4 lg:col-span-4">
             <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-base font-extrabold text-slate-900">
-                  Tus Rutinas
-                </h2>
+                <h2 className="text-base font-extrabold text-slate-900">Tus Rutinas</h2>
                 <button
                   type="button"
                   onClick={() => {
@@ -1479,9 +1273,8 @@ export const OpenGymHub: React.FC = () => {
 
               {workoutRoutines.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-5 text-center text-xs text-slate-500">
-                  Aún no tienes rutinas guardadas. Completa el nombre y los
-                  ejercicios a la derecha y presiona{' '}
-                  <strong className="text-slate-700">Guardar Rutina</strong>.
+                  Aún no tienes rutinas guardadas. Completa el nombre y los ejercicios a la derecha
+                  y presiona <strong className="text-slate-700">Guardar Rutina</strong>.
                 </div>
               ) : (
                 <div className="space-y-2.5">
@@ -1510,12 +1303,7 @@ export const OpenGymHub: React.FC = () => {
                           <div className="mt-1 flex items-center gap-2 text-xs font-medium text-slate-500">
                             <span>{r.exercises.length} ejercicios</span>
                             {r.assignedDays.length > 0 && (
-                              <span>
-                                ·{' '}
-                                {r.assignedDays
-                                  .map((d) => DAYS_SHORT[d])
-                                  .join(', ')}
-                              </span>
+                              <span>· {r.assignedDays.map((d) => DAYS_SHORT[d]).join(', ')}</span>
                             )}
                           </div>
                         </button>
@@ -1524,12 +1312,8 @@ export const OpenGymHub: React.FC = () => {
                           onClick={() => {
                             deleteWorkoutRoutine(r.id);
                             if (editingRoutine.id === r.id) {
-                              const remaining = workoutRoutines.filter(
-                                (item) => item.id !== r.id
-                              );
-                              setEditingRoutine(
-                                remaining[0] ?? createEmptyRoutineDraft()
-                              );
+                              const remaining = workoutRoutines.filter((item) => item.id !== r.id);
+                              setEditingRoutine(remaining[0] ?? createEmptyRoutineDraft());
                             }
                           }}
                           className="rounded-xl p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
@@ -1549,10 +1333,14 @@ export const OpenGymHub: React.FC = () => {
           <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm lg:col-span-8">
             <div className="mb-5 flex flex-col justify-between gap-4 border-b border-slate-100 pb-5 sm:flex-row sm:items-end">
               <div className="flex-1">
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
+                <label
+                  htmlFor="opengymhub-field-2"
+                  className="block text-xs font-bold uppercase tracking-wider text-slate-500"
+                >
                   Nombre de la rutina
                 </label>
                 <input
+                  id="opengymhub-field-2"
                   type="text"
                   value={editingRoutine.name}
                   placeholder="Ej. Día 1 - Torso, Piernas, Cuerpo Completo..."
@@ -1572,9 +1360,7 @@ export const OpenGymHub: React.FC = () => {
                 onClick={() => {
                   const cleanName = editingRoutine.name.trim();
                   if (!cleanName) {
-                    setRoutineErrorToast(
-                      'Ponle un nombre a tu rutina antes de guardarla.'
-                    );
+                    setRoutineErrorToast('Ponle un nombre a tu rutina antes de guardarla.');
                     return;
                   }
                   const routineToSave: WorkoutRoutine = {
@@ -1585,9 +1371,7 @@ export const OpenGymHub: React.FC = () => {
                   setEditingRoutine(routineToSave);
                   setSelectedRoutineId(routineToSave.id);
                   setRoutineErrorToast(null);
-                  setRoutineSavedToast(
-                    `Rutina "${routineToSave.name}" guardada correctamente.`
-                  );
+                  setRoutineSavedToast(`Rutina "${routineToSave.name}" guardada correctamente.`);
                   setTimeout(() => setRoutineSavedToast(null), 3500);
                 }}
                 className="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 px-5 py-3 text-xs font-bold text-white shadow-sm hover:bg-emerald-500"
@@ -1622,12 +1406,9 @@ export const OpenGymHub: React.FC = () => {
                       key={dayName}
                       type="button"
                       onClick={() => {
-                        const exists =
-                          editingRoutine.assignedDays.includes(dayIdx);
+                        const exists = editingRoutine.assignedDays.includes(dayIdx);
                         const nextDays = exists
-                          ? editingRoutine.assignedDays.filter(
-                              (d) => d !== dayIdx
-                            )
+                          ? editingRoutine.assignedDays.filter((d) => d !== dayIdx)
                           : [...editingRoutine.assignedDays, dayIdx].sort();
                         setEditingRoutine({
                           ...editingRoutine,
@@ -1650,8 +1431,8 @@ export const OpenGymHub: React.FC = () => {
             {/* Ejercicios dentro de la rutina */}
             {editingRoutine.exercises.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-600">
-                Aún no agregaste ejercicios a esta rutina. Elige los ejercicios
-                que quieras en el buscador de abajo y presiona{' '}
+                Aún no agregaste ejercicios a esta rutina. Elige los ejercicios que quieras en el
+                buscador de abajo y presiona{' '}
                 <strong className="text-slate-900">Agregar a la rutina</strong>.
               </div>
             ) : (
@@ -1684,14 +1465,13 @@ export const OpenGymHub: React.FC = () => {
                             max={10}
                             value={rEx.targetSets}
                             onChange={(e) => {
-                              const next = editingRoutine.exercises.map(
-                                (item, i) =>
-                                  i === idx
-                                    ? {
-                                        ...item,
-                                        targetSets: Number(e.target.value),
-                                      }
-                                    : item
+                              const next = editingRoutine.exercises.map((item, i) =>
+                                i === idx
+                                  ? {
+                                      ...item,
+                                      targetSets: Number(e.target.value),
+                                    }
+                                  : item,
                               );
                               setEditingRoutine({
                                 ...editingRoutine,
@@ -1713,17 +1493,16 @@ export const OpenGymHub: React.FC = () => {
                               max={30}
                               value={rEx.targetRepRange[0]}
                               onChange={(e) => {
-                                const next = editingRoutine.exercises.map(
-                                  (item, i) =>
-                                    i === idx
-                                      ? {
-                                          ...item,
-                                          targetRepRange: [
-                                            Number(e.target.value),
-                                            item.targetRepRange[1],
-                                          ] as [number, number],
-                                        }
-                                      : item
+                                const next = editingRoutine.exercises.map((item, i) =>
+                                  i === idx
+                                    ? {
+                                        ...item,
+                                        targetRepRange: [
+                                          Number(e.target.value),
+                                          item.targetRepRange[1],
+                                        ] as [number, number],
+                                      }
+                                    : item,
                                 );
                                 setEditingRoutine({
                                   ...editingRoutine,
@@ -1739,17 +1518,16 @@ export const OpenGymHub: React.FC = () => {
                               max={30}
                               value={rEx.targetRepRange[1]}
                               onChange={(e) => {
-                                const next = editingRoutine.exercises.map(
-                                  (item, i) =>
-                                    i === idx
-                                      ? {
-                                          ...item,
-                                          targetRepRange: [
-                                            item.targetRepRange[0],
-                                            Number(e.target.value),
-                                          ] as [number, number],
-                                        }
-                                      : item
+                                const next = editingRoutine.exercises.map((item, i) =>
+                                  i === idx
+                                    ? {
+                                        ...item,
+                                        targetRepRange: [
+                                          item.targetRepRange[0],
+                                          Number(e.target.value),
+                                        ] as [number, number],
+                                      }
+                                    : item,
                                 );
                                 setEditingRoutine({
                                   ...editingRoutine,
@@ -1770,14 +1548,13 @@ export const OpenGymHub: React.FC = () => {
                             step={15}
                             value={rEx.restSeconds}
                             onChange={(e) => {
-                              const next = editingRoutine.exercises.map(
-                                (item, i) =>
-                                  i === idx
-                                    ? {
-                                        ...item,
-                                        restSeconds: Number(e.target.value),
-                                      }
-                                    : item
+                              const next = editingRoutine.exercises.map((item, i) =>
+                                i === idx
+                                  ? {
+                                      ...item,
+                                      restSeconds: Number(e.target.value),
+                                    }
+                                  : item,
                               );
                               setEditingRoutine({
                                 ...editingRoutine,
@@ -1791,9 +1568,7 @@ export const OpenGymHub: React.FC = () => {
                         <div className="flex items-center gap-1 pt-4">
                           <button
                             type="button"
-                            onClick={() =>
-                              handleMoveRoutineExercise(idx, idx - 1)
-                            }
+                            onClick={() => handleMoveRoutineExercise(idx, idx - 1)}
                             className="rounded-lg border border-slate-200 bg-white p-1.5 text-slate-600 hover:bg-slate-100"
                             title="Subir"
                           >
@@ -1801,9 +1576,7 @@ export const OpenGymHub: React.FC = () => {
                           </button>
                           <button
                             type="button"
-                            onClick={() =>
-                              handleMoveRoutineExercise(idx, idx + 1)
-                            }
+                            onClick={() => handleMoveRoutineExercise(idx, idx + 1)}
                             className="rounded-lg border border-slate-200 bg-white p-1.5 text-slate-600 hover:bg-slate-100"
                             title="Bajar"
                           >
@@ -1835,11 +1608,15 @@ export const OpenGymHub: React.FC = () => {
 
             {/* Agregar ejercicio a la rutina */}
             <div className="mt-6 space-y-3 border-t border-slate-100 pt-5">
-              <label className="block text-xs font-bold text-slate-700">
+              <label
+                htmlFor="opengymhub-field-3"
+                className="block text-xs font-bold text-slate-700"
+              >
                 Buscar y agregar ejercicio a la rutina
               </label>
               <div className="flex flex-col gap-2.5 sm:flex-row">
                 <input
+                  id="opengymhub-field-3"
                   type="text"
                   value={routineExerciseFilter}
                   onChange={(e) => setRoutineExerciseFilter(e.target.value)}
@@ -1898,21 +1675,15 @@ export const OpenGymHub: React.FC = () => {
               Músculos trabajados esta semana
             </h2>
             <p className="mt-1 text-xs text-slate-500">
-              Calculado a partir de tus entrenamientos guardados en los últimos
-              7 días.
+              Calculado a partir de tus entrenamientos guardados en los últimos 7 días.
             </p>
 
             <div className="mt-5 space-y-3.5">
               {weeklyMuscleVolume.slice(0, 10).map((item) => {
-                const widthPct = Math.min(
-                  100,
-                  (item.totalEffectiveSets / 20) * 100
-                );
+                const widthPct = Math.min(100, (item.totalEffectiveSets / 20) * 100);
                 let barColor = 'bg-slate-400';
                 let friendlyStatus =
-                  item.totalEffectiveSets === 0
-                    ? 'Sin series aún'
-                    : 'Falta entrenar';
+                  item.totalEffectiveSets === 0 ? 'Sin series aún' : 'Falta entrenar';
                 if (item.zone === 'mev') {
                   barColor = 'bg-blue-500';
                   friendlyStatus = 'En buen camino';
@@ -1927,9 +1698,7 @@ export const OpenGymHub: React.FC = () => {
                 return (
                   <div key={item.muscle} className="space-y-1.5">
                     <div className="flex items-center justify-between text-xs">
-                      <span className="font-bold text-slate-800">
-                        {item.muscle}
-                      </span>
+                      <span className="font-bold text-slate-800">{item.muscle}</span>
                       <div className="flex items-center gap-2">
                         <span className="font-extrabold text-slate-900">
                           {item.totalEffectiveSets} series
@@ -1955,9 +1724,7 @@ export const OpenGymHub: React.FC = () => {
           <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm lg:col-span-6">
             <div className="mb-4 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
               <div>
-                <h2 className="text-lg font-extrabold text-slate-900">
-                  Evolución de tu Fuerza
-                </h2>
+                <h2 className="text-lg font-extrabold text-slate-900">Evolución de tu Fuerza</h2>
                 <p className="text-xs text-slate-500">
                   Compara tu fuerza máxima real con tu peso corporal
                 </p>
@@ -1983,9 +1750,8 @@ export const OpenGymHub: React.FC = () => {
                   Aún no tienes series registradas para este ejercicio
                 </p>
                 <p className="mt-1 max-w-sm text-xs text-slate-500">
-                  Cuando entrenes y guardes una sesión con este ejercicio, aquí
-                  verás la evolución real de tu fuerza máxima (1RM) junto a tu
-                  peso corporal.
+                  Cuando entrenes y guardes una sesión con este ejercicio, aquí verás la evolución
+                  real de tu fuerza máxima (1RM) junto a tu peso corporal.
                 </p>
               </div>
             ) : (
@@ -2071,219 +1837,15 @@ export const OpenGymHub: React.FC = () => {
       {/* ====================================================================
           MODAL: CÓMO SE HACE EL EJERCICIO
          ==================================================================== */}
-      <AnimatePresence>
-        {detailModalExercise && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs"
-            onClick={() => setDetailModalExercise(null)}
-          >
-            <motion.div
-              initial={{ scale: 0.96, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.96, opacity: 0 }}
-              onClick={(e) => e.stopPropagation()}
-              className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl"
-            >
-              <div className="flex items-start justify-between gap-4 border-b border-slate-100 pb-4">
-                <div>
-                  <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-700">
-                    {detailModalExercise.primaryMuscle} ·{' '}
-                    {detailModalExercise.equipment}
-                  </span>
-                  <h3 className="mt-2 text-xl font-extrabold text-slate-900">
-                    {detailModalExercise.nameEs}
-                  </h3>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setDetailModalExercise(null)}
-                  className="rounded-xl border border-slate-200 p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
+      <ExerciseDetailDialog
+        detailModalExercise={detailModalExercise}
+        detailModalTab={detailModalTab}
+        setDetailModalExercise={setDetailModalExercise}
+        setDetailModalTab={setDetailModalTab}
+        workoutSessions={workoutSessions}
+      />
 
-              {/* Pestañas del modal */}
-              <div className="mt-4 flex gap-2 border-b border-slate-100 pb-3">
-                {(
-                  [
-                    { id: 'demo', label: 'Cómo se hace' },
-                    { id: 'history', label: 'Tus entrenamientos anteriores' },
-                  ] as const
-                ).map((t) => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    onClick={() => setDetailModalTab(t.id)}
-                    className={`rounded-xl px-4 py-2 text-xs font-bold transition ${
-                      detailModalTab === t.id
-                        ? 'bg-indigo-600 text-white'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                    }`}
-                  >
-                    {t.label}
-                  </button>
-                ))}
-              </div>
-
-              {detailModalTab === 'demo' && (
-                <div className="mt-5 space-y-5">
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 p-3 text-center">
-                      <img
-                        src={detailModalExercise.images[1]}
-                        alt={detailModalExercise.nameEs}
-                        className="mx-auto h-52 object-contain"
-                      />
-                      <span className="mt-2 block text-xs font-semibold text-slate-500">
-                        Movimiento paso a paso
-                      </span>
-                    </div>
-                    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 p-3 text-center">
-                      <img
-                        src={detailModalExercise.images[0]}
-                        alt={detailModalExercise.nameEs}
-                        className="mx-auto h-52 object-contain"
-                      />
-                      <span className="mt-2 block text-xs font-semibold text-slate-500">
-                        Posición inicial
-                      </span>
-                    </div>
-                  </div>
-
-                  <div>
-                    <h4 className="text-sm font-extrabold text-slate-900">
-                      Instrucciones sencillas:
-                    </h4>
-                    <ol className="mt-3 space-y-2.5 text-sm text-slate-700">
-                      {detailModalExercise.instructionsEs.map((step, i) => (
-                        <li
-                          key={i}
-                          className="flex gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-3.5"
-                        >
-                          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-xs font-bold text-white">
-                            {i + 1}
-                          </span>
-                          <span className="leading-relaxed">{step}</span>
-                        </li>
-                      ))}
-                    </ol>
-                  </div>
-                </div>
-              )}
-
-              {detailModalTab === 'history' && (
-                <div className="mt-5 space-y-3">
-                  {workoutSessions.filter((s) =>
-                    s.sets.some(
-                      (st) => st.exerciseId === detailModalExercise.id
-                    )
-                  ).length === 0 ? (
-                    <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-xs text-slate-500">
-                      Aún no tienes entrenamientos registrados con este
-                      ejercicio.
-                    </div>
-                  ) : (
-                    workoutSessions
-                      .filter((s) =>
-                        s.sets.some(
-                          (st) => st.exerciseId === detailModalExercise.id
-                        )
-                      )
-                      .map((sess) => {
-                        const exSets = sess.sets.filter(
-                          (st) => st.exerciseId === detailModalExercise.id
-                        );
-                        return (
-                          <div
-                            key={sess.id}
-                            className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm"
-                          >
-                            <div className="flex justify-between font-bold text-slate-900">
-                              <span>{sess.routineName}</span>
-                              <span className="text-xs text-slate-500">
-                                {sess.date}
-                              </span>
-                            </div>
-                            <div className="mt-2.5 flex flex-wrap gap-2">
-                              {exSets.map((st) => (
-                                <span
-                                  key={st.id}
-                                  className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800"
-                                >
-                                  {st.weightKg} kg × {st.reps} reps
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      })
-                  )}
-                </div>
-              )}
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ====================================================================
-          BARRA FLOTANTE: TEMPORIZADOR DE DESCANSO
-         ==================================================================== */}
-      <AnimatePresence>
-        {(isRestTimerActive || restTimerRemaining > 0) && (
-          <motion.div
-            initial={{ y: 80, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 80, opacity: 0 }}
-            className="fixed right-4 bottom-4 left-4 z-40 mx-auto max-w-xl rounded-3xl border border-emerald-300 bg-white p-4 shadow-xl"
-          >
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="flex h-12 w-14 items-center justify-center rounded-2xl bg-emerald-600 text-lg font-extrabold text-white">
-                  {Math.floor(restTimerRemaining / 60)}:
-                  {String(restTimerRemaining % 60).padStart(2, '0')}
-                </div>
-                <div>
-                  <div className="text-sm font-extrabold text-slate-900">
-                    Tiempo de descanso
-                  </div>
-                  <div className="text-xs font-medium text-slate-500">
-                    {restTimerExerciseName} · Meta {restTimerTotal} seg
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => adjustRestTimer(-15)}
-                  className="rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-200"
-                >
-                  -15s
-                </button>
-                <button
-                  type="button"
-                  onClick={() => adjustRestTimer(15)}
-                  className="rounded-xl border border-slate-200 bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-200"
-                >
-                  +15s
-                </button>
-                <button
-                  type="button"
-                  onClick={stopRestTimer}
-                  className="inline-flex items-center gap-1 rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-emerald-500"
-                >
-                  <SkipForward className="h-3.5 w-3.5" />
-                  <span>Listo</span>
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <RestTimer />
     </div>
   );
 };

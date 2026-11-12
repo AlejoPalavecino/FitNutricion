@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { OPENGYM_EXERCISE_CATALOG } from '../data/opengymCatalog';
+import type { WorkoutSession } from '../types/nutrition';
 import {
   calculateEstimated1RM,
   calculatePeriWorkoutNutrition,
@@ -7,8 +9,6 @@ import {
   evaluateStrengthBodyweightSynergy,
   getDoubleProgressionSuggestion,
 } from './strengthAnalytics';
-import { OPENGYM_EXERCISE_CATALOG } from '../data/opengymCatalog';
-import type { WorkoutSession } from '../types/nutrition';
 
 describe('Analítica de Fuerza & Sobrecarga Progresiva (src/lib/strengthAnalytics.ts)', () => {
   it('usa Fórmula de Brzycki para <= 10 reps, Epley para > 10 reps e ignora series warmup', () => {
@@ -81,10 +81,7 @@ describe('Analítica de Fuerza & Sobrecarga Progresiva (src/lib/strengthAnalytic
     // Si en la serie 2 hizo 8 reps (< 10), mantiene 80 kg y sugiere +1 rep (9)
     const prevSessionPartial: WorkoutSession = {
       ...prevSessionHitAll,
-      sets: [
-        prevSessionHitAll.sets[0],
-        { ...prevSessionHitAll.sets[1], reps: 8 },
-      ],
+      sets: [prevSessionHitAll.sets[0], { ...prevSessionHitAll.sets[1], reps: 8 }],
     };
 
     const planKeep = getDoubleProgressionSuggestion({

@@ -23,5 +23,6 @@ Las pruebas usan un contrato auth mínimo sobre PostgreSQL, no credenciales real
 No se ejecutó una migración de producción desde este PR.
 
 Referencias de diseño:
+
 - https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html
 - https://supabase.com/docs/guides/database/postgres/row-level-security
