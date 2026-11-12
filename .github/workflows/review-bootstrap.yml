@@ -1,12 +1,12 @@
-name: Remediation baseline
+name: Quality tooling setup
 on:
   push:
-    branches: ['improvements/stage-2-reliable-sync']
+    branches: ['improvements/stage-4-quality-pwa']
     paths: ['.github/workflows/review-bootstrap.yml']
 permissions:
-  contents: read
+  contents: write
 jobs:
-  baseline:
+  tooling:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,14 +17,32 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
+      - run: npm install --save-dev --save-exact eslint@9 @eslint/js@9 typescript-eslint@8 eslint-plugin-react-hooks@5 eslint-plugin-jsx-a11y@6 globals@16 prettier@3 @playwright/test@1 acorn@8 fake-indexeddb@6
+      - run: npm install --save-exact zod@4
       - run: npm test
       - run: npm run build
-      - name: Package reproducible validation workspace (no credentials)
+        env:
+          VITE_AUTH_MODE: local
+      - name: Record dependency review
+        run: npm audit --json > /tmp/dependency-audit.json || true
+      - name: Commit reviewed-branch tooling only
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add package.json package-lock.json
+          git diff --staged --quiet || git commit -m 'build: pin quality and browser validation dependencies'
+          AUTH=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $AUTH" push origin "HEAD:${GITHUB_REF_NAME}"
+      - name: Package review workspace without credentials
         if: always()
-        run: tar --exclude=.git --exclude=validation-workspace.tar.gz -czf /tmp/validation-workspace.tar.gz . && mv /tmp/validation-workspace.tar.gz .
+        run: tar --exclude=.git --exclude=.review --exclude=validation-workspace.tar.gz -czf /tmp/validation-workspace.tar.gz . && mv /tmp/validation-workspace.tar.gz .
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: remediation-validation-workspace
-          path: validation-workspace.tar.gz
+          path: |
+            validation-workspace.tar.gz
+            /tmp/dependency-audit.json
           retention-days: 1
