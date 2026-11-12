@@ -31,10 +31,9 @@ s=p.read_text()
 for label in ['Agregar a la rutina','Guardar Entrenamiento']:
  s=s.replace("await page.getByRole('button', { name: '"+label+"', exact: true }).click();", "await page.getByRole('button', { name: '"+label+"', exact: true }).first().click();")
 p.write_text(s)
-# The focus hook must capture the opener before focusing the input.
-# React autoFocus runs first and would otherwise capture the dialog input itself.
 p=Path('src/components/navigation/QuickActionCommand.tsx')
 p.write_text(p.read_text().replace('                autoFocus\n',''))
 subprocess.run(['node','scripts/organize-imports.cjs'],check=True)
 subprocess.run(['npm','run','format'],check=True,stdout=subprocess.DEVNULL)
 subprocess.run(['npm','run','format'],check=True,stdout=subprocess.DEVNULL)
+# Workflow changes are published separately through the authorized connector.
