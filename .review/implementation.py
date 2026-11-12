@@ -15,5 +15,13 @@ runpy.run_path(str(root/'quality_final.py'))
 subprocess.run(['node','scripts/organize-imports.cjs'],check=True)
 subprocess.run(['npm','run','format'],check=True,stdout=subprocess.DEVNULL)
 runpy.run_path(str(root/'quality_post.py'))
+p=Path('src/services/securityService.ts')
+lines=[]
+for line in p.read_text().splitlines():
+ if 'eslint-disable-next-line no-control-regex' in line: continue
+ if '.replace(' in line and ('\\u0000' in line or chr(0) in line):
+  line="    .split('').filter(char => char.charCodeAt(0) >= 32 && char.charCodeAt(0) !== 127).join('')"
+ lines.append(line)
+p.write_text('\n'.join(lines)+'\n')
 subprocess.run(['node','scripts/organize-imports.cjs'],check=True)
 subprocess.run(['npm','run','format'],check=True,stdout=subprocess.DEVNULL)
