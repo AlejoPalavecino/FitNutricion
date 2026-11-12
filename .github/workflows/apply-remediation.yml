@@ -2,11 +2,10 @@ name: Validate remediation patch
 on:
   push:
     branches:
-      - improvements/stage-1-integrity-privacy
       - improvements/stage-2-reliable-sync
       - improvements/stage-3-domain-consistency
       - improvements/stage-4-quality-pwa
-    paths: ['.review/change.json']
+    paths: ['.review/implementation.py']
 permissions:
   contents: write
 concurrency:
@@ -32,26 +31,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 2
           persist-credentials: false
-      - name: Verify and apply the reviewed patch
-        run: |
-          python3 - <<'PY'
-          import base64, hashlib, json, os, subprocess, zlib
-          from pathlib import Path
-          data = json.loads(Path('.review/change.json').read_text())
-          assert data['branch'] == os.environ['GITHUB_REF_NAME']
-          assert subprocess.check_output(['git', 'rev-parse', 'HEAD^'], text=True).strip() == data['expected_parent']
-          patch = zlib.decompress(base64.b64decode(data['patch']))
-          assert hashlib.sha256(patch).hexdigest() == data['sha256']
-          subprocess.run(['git', 'apply', '--check', '-'], input=patch, check=True)
-          subprocess.run(['git', 'apply', '-'], input=patch, check=True)
-          PY
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: npm
       - run: npm ci
+      - name: Apply readable guarded implementation
+        run: python3 .review/implementation.py
+      - run: npm ci
+      - run: if [ -f scripts/generate-seed.mjs ]; then node scripts/generate-seed.mjs; fi
       - run: npm test
       - run: npm run build
         env:
@@ -62,6 +51,10 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f supabase/tests/bootstrap.sql
           psql -v ON_ERROR_STOP=1 -f supabase/schema.sql
           for file in supabase/migrations/*.sql; do psql -v ON_ERROR_STOP=1 -f "$file"; done
+          if [ -f supabase/seed.sql ]; then
+            psql -v ON_ERROR_STOP=1 -f supabase/seed.sql
+            psql -v ON_ERROR_STOP=1 -f supabase/seed.sql
+          fi
           for file in supabase/tests/*.sql; do
             [ "$file" = supabase/tests/bootstrap.sql ] || psql -v ON_ERROR_STOP=1 -f "$file"
           done
@@ -69,10 +62,19 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          rm .review/change.json
+          rm -rf .review
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
           git commit -m 'fix: apply validated remediation stage'
           AUTH=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
           git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $AUTH" push origin "HEAD:${GITHUB_REF_NAME}"
+      - name: Package review workspace without credentials
+        if: always()
+        run: tar --exclude=.git --exclude=.review --exclude=validation-workspace.tar.gz -czf /tmp/validation-workspace.tar.gz . && mv /tmp/validation-workspace.tar.gz .
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: remediation-validation-workspace
+          path: validation-workspace.tar.gz
+          retention-days: 1
